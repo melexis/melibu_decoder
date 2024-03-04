@@ -1,0 +1,13 @@
+{
+  "name": "MeLiBu HLA",
+  "apiVersion": "1.0.0",
+  "author": "shy coder",
+  "version": "0.0.1",
+  "description": "Decoding messages using MBDF file",
+  "extensions": {
+    "MeLiBu HLA": {
+      "type": "HighLevelAnalyzer",
+      "entryPoint": "HighLevelAnalyzer.Hla"
+    }
+  }
+}
