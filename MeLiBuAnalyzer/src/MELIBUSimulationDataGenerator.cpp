@@ -35,27 +35,34 @@ void MELIBUSimulationDataGenerator::CreateFrame() {
     U32 samples_per_bit = mSimulationSampleRateHz / mSettings->mBitRate;
     mSerialSimulationData.Advance( samples_per_bit * Random( 1, 4 ) ); // simulate jitter
     CreateHeader();
-    CreateSerialByte( 0xff );
-    CreateSerialByte( 0xe4 );
-    CreateSerialByte( 0x1c );
-    //CreateSerialByte( 0x01 );   // comment this to test missing byte
-    //CreateSerialByte( 0x01 ); // uncomment this when adding additional byte to test errors
-    CreateSerialByte( 0x13 );
-    CreateSerialByte( 0x56 );
-    CreateSerialByte( 0x77 );
-    /*
-     * for( U8 i = 0; i < 8; i++ )
-     * {
-     *  CreateSerialByte( ( U8 )Random( 0, 225 ) );
-     * }
-     */
-    //CreateReponse( Random( 1, 8 ) );
+    CreateSerialByte( 0x2a );
+    CreateSerialByte( 0xc8 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x2c );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x02 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x0d );
+    CreateSerialByte( 0x01 );
+    CreateSerialByte( 0x0b );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0xb5 );
+    CreateSerialByte( 0x29 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+
+    CreateSerialByte( 0xcc );
+    CreateSerialByte( 0x2a );
 }
 
 void MELIBUSimulationDataGenerator::CreateHeader() {
+    // break field + id fields (1 and 2)
     CreateBreakField();
-    CreateSerialByte( 0xf0 );
-    CreateSerialByte( 0x04 );
+    CreateSerialByte( 0x12 );
+    CreateSerialByte( 0x1c );
 }
 
 void MELIBUSimulationDataGenerator::CreateBreakField() {
@@ -137,16 +144,8 @@ void MELIBUSimulationDataGenerator::SwapEnds( U8& byte ) {
     }
     byte = t;
 }
-U8 MELIBUSimulationDataGenerator::SwapEnds2( U8 byte ) {
-    U8 t = 0;
-    for( int n = 7; n >= 0; n-- ) {
-        t |= ( ( byte >> n ) & 1 ) << 7;
-        if( n )
-            t >>= 1;
-    }
-    return t;
-}
 
+// not in use
 U32 MELIBUSimulationDataGenerator::Random( U32 min, U32 max ) {
     return min + ( rand() % ( max - min + 1 ) );
 }

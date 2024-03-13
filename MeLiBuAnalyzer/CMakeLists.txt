@@ -21,8 +21,6 @@ src/MELIBUAnalyzerSettings.cpp
 src/MELIBUAnalyzerSettings.h
 src/MELIBUSimulationDataGenerator.cpp
 src/MELIBUSimulationDataGenerator.h
-src/MELIBUCrc.h
-src/MELIBUCrc.cpp
 )
 
 add_analyzer_plugin(${PROJECT_NAME} SOURCES ${SOURCES})

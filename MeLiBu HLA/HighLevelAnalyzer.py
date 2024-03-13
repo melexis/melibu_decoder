@@ -2,11 +2,12 @@
 # For more information and documentation, please go to https://support.saleae.com/extensions/high-level-analyzer-extensions
 
 from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame, StringSetting, NumberSetting, ChoicesSetting
+from saleae.data import GraphTimeDelta
 
 import sys
  
-#MY_ADDITIONAL_PACKAGES_PATH = "C:\\Program Files (x86)\\Melexis\\Python\\Lib\\site-packages"
-MY_ADDITIONAL_PACKAGES_PATH = "C:\\Projects\\MeLiBu_in_C++\\HLA_MeLiBu\\.venv\\Lib\\site-packages"
+MY_ADDITIONAL_PACKAGES_PATH = "C:\\Program Files (x86)\\Melexis\\Python\\Lib\\site-packages"
+#MY_ADDITIONAL_PACKAGES_PATH = "C:\\Projects\\MeLiBu_in_C++\\HLA_MeLiBu\\.venv\\Lib\\site-packages"
  
 if MY_ADDITIONAL_PACKAGES_PATH not in sys.path:
  
@@ -22,29 +23,30 @@ from pymbdfparser.model import CommandFrameMelibu1, LedFrameMelibu1, FrameMelibu
 from pymbdfparser.model.script_frame import ScriptFrameBase
 
 from ast import literal_eval
-#sys.path.append("C:\\Program Files (x86)\\Melexis\\Python\\Lib\\site-packages")
+
 # High level analyzers must subclass the HighLevelAnalyzer class.
 class Hla(HighLevelAnalyzer):
     
     # List of settings that a user can set for this High Level Analyzer.
     mbdf_filepath = StringSetting()
-    #my_number_setting = NumberSetting(min_value=0, max_value=100)
-    #my_choices_setting = ChoicesSetting(choices=('A', 'B'))
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
         'header1': {
-            'format': 'slave_addr: {{data.slave}}, R/T: {{data.r}}, F: {{data.f}}, instr_ext: {{data.instr}}'
+            # 'format': 'frame: {{data.frame}}, slave_addr: {{data.slave}}, R/T: {{data.r}}, F: {{data.f}}, instr_ext: {{data.instr}}'
+            'format': 'frame: {{data.frame}}, info: {{data.frame_info}}'
         },
         'header2': {
             'format': 'slave_addr: {{data.int}}, R/T: {{data.r}}, F:{{data.f}}, I:{{data.i}}, PL_length: {{data.len}}'
+        },
+        'data': {
+            'format': 'signal: {{data.signal_name}}, value: {{data.signal_value}}'
         }
     }
 
     def __init__(self):
         '''
         Initialize HLA.
-
         Settings can be accessed using the same name used above.
         '''
         
@@ -53,26 +55,102 @@ class Hla(HighLevelAnalyzer):
         app.run()
         self.model = app.model
         self.protocol_version = self.model.bus_protocol_version
-        self.ack = self.model
-        
-        print("Settings:", self.mbdf_filepath)
 
     def decode_id1(self, frame:AnalyzerFrame):
-        n = literal_eval((frame.data['data']))
-        self.id1 = n
+        # only save id value and start time; this frame will be joined with id2 frame
+        self.id1 = literal_eval((frame.data['data'])) # 'data' is the name of column from low level analyzer
         self.id1_start = frame.start_time
         
     def decode_id2(self, frame:AnalyzerFrame):
-        n = literal_eval((frame.data['data']))
+        id2 = literal_eval((frame.data['data']))
+        self.data_array = [] # empty data array
+        self.data_length = 0 # reset data length
+        # initialize current frame with first frame; this is not important because current frame will have true value 
+        # current frame is frame found based on id1 and id2 value; current frame is used later when reading data in frame
+        self.current_frame = self.model.frames.get(list(self.model.frames.keys())[0])  
         if self.protocol_version < 2.0:
+            # extract values found in header id fields
             func = self.id1 & 1
             rt = (self.id1 & 2) >> 1
             slave_adr = (self.id1 & 252) >> 2
-            inst = (n & 252) >> 2
-            return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'slave': slave_adr, 'r': rt, 'f': func, 'instr': inst})
+            inst = (id2 & 252) >> 2
+            info_str = 'R/T = {RT}, F = {f}, INST = {i}, SLAVE = {slave}'.format(RT = rt, f = func, i = inst, slave = hex(slave_adr))
+            
+            # calculate data length
+            self.data_length = 0
+            if func == 0:
+                self.data_length = bin(inst & 7).count("1") * 6
+            else:
+                self.data_length = bin(inst).count("1") * 6
+            
+            # iterate through all frames in mbdf file and match with frame with same values from id's
+            for frame_name in self.model.frames.keys():
+                curr_frame = self.model.frames.get(frame_name)
+                f_type = 0
+                if curr_frame.function_type == "LED":
+                    f_type = 1
+                if (curr_frame.r_t_bit == rt) & (f_type == func) & (curr_frame.sub_address == inst):
+                    self.current_frame = curr_frame # set current frame for data decoding
+                    return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': info_str})           
+                
+            # if we are here that means no matching fram has ben found and we will return unknown frame
+            return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': info_str})
         else:
-            slave_adr = n
+            slave_adr = id2
             return AnalyzerFrame('id1', frame.start_time, frame.end_time, {'slave address': slave_adr})
+        
+    def decode_data(self, frame:AnalyzerFrame):
+        self.data_array.append(frame)  # add data byte to array
+        
+        # only if it is last data byte decode them and return list of frames
+        if self.data_length == 1:
+            frames = [] # array of frames to be returned; this is for tabular view and bar in UI
+            delta_time = self.data_array[-1].end_time - self.data_array[0].start_time # all data bytes duration
+            delta_time_float = delta_time.__float__()                                 # convert GraphTimeDelta to float [s]
+            delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
+            
+            for sig in self.current_frame.signals:
+                sig_value = 0 # initialize raw signal value
+                
+                sig_chunk = sig.signal_chunks_little_wordswap[0] # signal_chunks_little_wordswap returns array with one element
+                
+                name = sig_chunk.signal.name
+                offset = sig_chunk.real_offset
+                size = sig_chunk.size
+                
+                temp_size = size
+                temp_offset = offset
+                # iterate through data array frames that have parts of signal value 
+                for i in range(offset//8, (size + offset + 1)//8 ):
+                    curr_frame = self.data_array[i] # index frame
+                    array_value = literal_eval((curr_frame.data['data'])) # extract frame value
+                    
+                    # calculate offset and size of part of signal value in current frame
+                    local_offset = temp_offset % 8
+                    local_size = 0
+                    if temp_size > (8 - local_offset):
+                        local_size = 8 - local_offset
+                    else:
+                        local_size = temp_size
+                    mask = (255 >> local_offset) & (255 << (8 - local_size - local_offset)) # mask for extracting part of signal value in frame 
+                    chunk_value = array_value & mask
+                    
+                    # update temp size and temp offset
+                    temp_size = temp_size - local_size
+                    temp_offset = temp_offset + local_size
+                    
+                    # add chunk_value to whole signal value
+                    sig_value = (sig_value << local_size) | chunk_value
+                    
+                # calculate delta time between start time of first data frame and startand end of extracted raw values frames
+                delta_start = GraphTimeDelta(second = (offset + (offset // 8) * 2 + 1) * delta_per_bit)
+                delta_end = GraphTimeDelta(second = (offset + (offset // 8) * 2 + size + (size // 8) * 2 - 1) * delta_per_bit)
+                frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal_name': name,'signal_value': hex(sig_value)}))
+            return frames
+                
+        self.data_length = self.data_length - 1 # update data length
+        return []
+        
 
     def decode(self, frame: AnalyzerFrame):
         '''
@@ -87,8 +165,10 @@ class Hla(HighLevelAnalyzer):
             self.decode_id1(frame)
         elif frame.type == 'header_ID2':
             return self.decode_id2(frame)
+        elif frame.type == 'data':
+            return self.decode_data(frame)
         else:
             # Return the data frame itself
-            return AnalyzerFrame('', frame.start_time, frame.end_time, {'input_type': frame.type, 'value': 1})
+            return AnalyzerFrame(frame.type, frame.start_time, frame.end_time)
     
     

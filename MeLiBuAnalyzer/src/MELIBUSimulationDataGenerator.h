@@ -27,7 +27,6 @@ class MELIBUSimulationDataGenerator
     void CreateBreakField();
     void CreateSerialByte( U8 byte );
     void SwapEnds( U8& byte );
-    U8 SwapEnds2( U8 byte );
     U32 Random( U32 min, U32 max );
 
     SimulationChannelDescriptor mSerialSimulationData;

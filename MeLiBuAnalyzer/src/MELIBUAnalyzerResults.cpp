@@ -12,6 +12,7 @@ MELIBUAnalyzerResults::MELIBUAnalyzerResults( MELIBUAnalyzer* analyzer, MELIBUAn
 
 MELIBUAnalyzerResults::~MELIBUAnalyzerResults() {}
 
+// bubble text is shown on the bar above bits
 void MELIBUAnalyzerResults::GenerateBubbleText( U64 frame_index, Channel& channel, DisplayBase display_base ) {
     ClearResultStrings();
     Frame frame = GetFrame( frame_index );
@@ -41,6 +42,7 @@ void MELIBUAnalyzerResults::GenerateBubbleText( U64 frame_index, Channel& channe
             AddResultString( str[ 1 ].c_str() );
         }
     } else {
+        // depending on size of bar different strings are shown
         AnalyzerHelpers::GetNumberString( frame.mData1, display_base, 8, number_str, 128 );
         switch( ( MELIBUAnalyzerResults::tMELIBUFrameState )frame.mType ) {
             default:
@@ -142,6 +144,7 @@ void MELIBUAnalyzerResults::GenerateBubbleText( U64 frame_index, Channel& channe
     }
 }
 
+// txt and csv extension are supported
 void MELIBUAnalyzerResults::GenerateExportFile( const char* file, DisplayBase display_base, U32 export_type_user_id ) {
     std::ofstream file_stream( file, std::ios::out );
 
@@ -181,6 +184,7 @@ void MELIBUAnalyzerResults::GenerateExportFile( const char* file, DisplayBase di
     file_stream.close();
 }
 
+// not changed
 void MELIBUAnalyzerResults::GenerateFrameTabularText( U64 frame_index, DisplayBase display_base ) {
 #ifdef SUPPORTS_PROTOCOL_SEARCH
     Frame frame = GetFrame( frame_index );
