@@ -73,25 +73,42 @@ class Hla(HighLevelAnalyzer):
             func = self.id1 & 1
             rt = (self.id1 & 2) >> 1
             slave_adr = (self.id1 & 252) >> 2
-            inst = (id2 & 252) >> 2
-            info_str = 'R/T = {RT}, F = {f}, INST = {i}, SLAVE = {slave}'.format(RT = rt, f = func, i = inst, slave = hex(slave_adr))
+            inst = 0
+            if func == 0:
+                frame_size = (id2 & 28) >> 2
+                inst = (id2 & 224) >> 5
+                info_str = 'R/T = {RT}, F = {f}, INST = {i}, SIZE = {s}, SLAVE = {slave}'.format(RT = rt, f = func, i = inst, s = frame_size, slave = hex(slave_adr))
+            else:
+                frame_size = (id2 & 252) >> 2
+                info_str = 'R/T = {RT}, F = {f}, SIZE = {s}, SLAVE = {slave}'.format(RT = rt, f = func, s = frame_size, slave = hex(slave_adr))
+                
+            self.data_length = bin(frame_size).count("1") * 6
+            
+            #info_str = 'R/T = {RT}, F = {f}, INST = {i}, SLAVE = {slave}'.format(RT = rt, f = func, i = inst, slave = hex(slave_adr))
             
             # calculate data length
-            self.data_length = 0
-            if func == 0:
-                self.data_length = bin(inst & 7).count("1") * 6
-            else:
-                self.data_length = bin(inst).count("1") * 6
+            # self.data_length = 0
+            # if func == 0:
+            #     self.data_length = bin(inst & 7).count("1") * 6
+            # else:
+            #     self.data_length = bin(inst).count("1") * 6
             
             # iterate through all frames in mbdf file and match with frame with same values from id's
             for frame_name in self.model.frames.keys():
                 curr_frame = self.model.frames.get(frame_name)
+                # if frame_name == 'IcStatus':
+                #     print(curr_frame.ext_instruction)
                 f_type = 0
                 if curr_frame.function_type == "LED":
                     f_type = 1
-                if (curr_frame.r_t_bit == rt) & (f_type == func) & (curr_frame.sub_address == inst):
-                    self.current_frame = curr_frame # set current frame for data decoding
-                    return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': info_str})           
+                if(f_type == 0):
+                    if (curr_frame.r_t_bit == rt) & (f_type == func) & (curr_frame.sub_address == frame_size) & (curr_frame.ext_instruction == inst):
+                        self.current_frame = curr_frame # set current frame for data decoding
+                        return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': info_str})
+                else:
+                    if (curr_frame.r_t_bit == rt) & (f_type == func) & (curr_frame.sub_address == frame_size):
+                        self.current_frame = curr_frame # set current frame for data decoding
+                        return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': info_str})   
                 
             # if we are here that means no matching fram has ben found and we will return unknown frame
             return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': info_str})

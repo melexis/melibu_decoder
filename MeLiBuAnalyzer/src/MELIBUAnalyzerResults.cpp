@@ -4,6 +4,8 @@
 #include "MELIBUAnalyzerSettings.h"
 #include <iostream>
 #include <fstream>
+#include <string>
+#include <sstream>
 
 MELIBUAnalyzerResults::MELIBUAnalyzerResults( MELIBUAnalyzer* analyzer, MELIBUAnalyzerSettings* settings )
     :   AnalyzerResults(),
@@ -187,12 +189,24 @@ void MELIBUAnalyzerResults::GenerateExportFile( const char* file, DisplayBase di
 // not changed
 void MELIBUAnalyzerResults::GenerateFrameTabularText( U64 frame_index, DisplayBase display_base ) {
 #ifdef SUPPORTS_PROTOCOL_SEARCH
-    Frame frame = GetFrame( frame_index );
-    ClearTabularText();
-
-    char number_str[128];
-    AnalyzerHelpers::GetNumberString( frame.mData1, display_base, 8, number_str, 128 );
-    AddTabularText( number_str );
+    /*Frame frame = GetFrame( frame_index );
+     * ClearTabularText();
+     *
+     * char number_str[128];
+     * AnalyzerHelpers::GetNumberString( frame.mData1, display_base, 8, number_str, 128 );
+     * AddTabularText( number_str );*/
+    if( writeToTerminal == false ) {
+        ClearTabularText();
+        std::ostringstream s;
+        s << mSettings->mMELIBUVersion;
+        std::string version = s.str();
+        AddTabularText( "MeLiBu version: ", version.c_str() );
+        std::ostringstream s1;
+        s1 << mSettings->mBitRate;
+        std::string bitrate = s1.str();
+        AddTabularText( "Bit rate: ", bitrate.c_str(), "\n" );
+        writeToTerminal = true;
+    }
 #endif
 }
 

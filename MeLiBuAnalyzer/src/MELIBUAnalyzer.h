@@ -68,6 +68,9 @@ class ANALYZER_EXPORT MELIBUAnalyzer: public Analyzer2
 
     U8 GetBreakField( S64& startingSample, S64& endingSample, bool& framingError );
     U8 ByteFrame( S64& startingSample, S64& endingSample, bool& framingError, bool& is_break_field );
+    void StartingSampleInBreakField( U32 minBreakFieldBits, S64& startingSample, U32& num_break_bits,
+                                     bool& valid_frame );
+    bool SendAckByte( double MELIBUVersion, U8 idField1, U8 idField2 );
 
  protected: //vars
     std::auto_ptr < MELIBUAnalyzerSettings > mSettings;

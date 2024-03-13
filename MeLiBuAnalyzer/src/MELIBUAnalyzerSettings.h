@@ -3,6 +3,7 @@
 
 #include <AnalyzerSettings.h>
 #include <AnalyzerTypes.h>
+#include <fstream>
 
 class MELIBUAnalyzerSettings: public AnalyzerSettings
 {
@@ -11,15 +12,15 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     virtual ~MELIBUAnalyzerSettings();
 
     virtual bool SetSettingsFromInterfaces();
-    void UpdateInterfacesFromSettings();
     virtual void LoadSettings( const char* settings );
     virtual const char* SaveSettings();
+    void UpdateInterfacesFromSettings();
 
-    const char* mbdfFilepath;
-    Channel mInputChannel;
-    double mMELIBUVersion;
-    U32 mBitRate;
-    bool mACK;
+    const char* mbdfFilepath = "";
+    Channel mInputChannel = UNDEFINED_CHANNEL;
+    double mMELIBUVersion = 1.0;
+    U32 mBitRate = 9600;
+    bool mACK = false;
 
  protected:
     std::auto_ptr < AnalyzerSettingInterfaceChannel > mInputChannelInterface;
@@ -29,6 +30,9 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBUAckEnabledInterface;
 
     std::string RunPythonMbdfParser( const char* cmd );
+    std::string getDLLPath();
+
+    std::ofstream debugFile;
 };
 
 #endif //MELIBU_ANALYZER_SETTINGS

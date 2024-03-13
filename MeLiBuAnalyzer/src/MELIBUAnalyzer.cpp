@@ -121,48 +121,56 @@ void MELIBUAnalyzer::WorkerThread() {
             case MELIBUAnalyzerResults::headerID1:
                 mFrameState = MELIBUAnalyzerResults::headerID2;
                 id1 = byteFrame.mData1; // save byte value to id1
-                // for MELIBU 1 R/T bit is in id1
-                if( mSettings->mMELIBUVersion < 2.0 )
-                    ack = ack && ( ( id1 & 0x02 ) == 0 );
                 add_to_crc = true;
                 byte_order = 0; // first byte
                 break;
             case MELIBUAnalyzerResults::headerID2:
                 id2 = byteFrame.mData1; // save byte value to id2
+                nDataBytes = numberOfDataBytes( mSettings->mMELIBUVersion, id1, id2 );
+                // ovi uslovi nisu dobri!
+                if( nDataBytes == 0 )
+                    mFrameState = MELIBUAnalyzerResults::responseCRC1;
+                else
+                    mFrameState = MELIBUAnalyzerResults::responseDataZero;
                 // if instruction bit is set read two bytes for instruction; only possible for MELIBU 2
                 if( mSettings->mMELIBUVersion == 2.0 && ( id2 & 0x04 ) != 0 )
                     mFrameState = MELIBUAnalyzerResults::instruction1;
-                else
-                    mFrameState = MELIBUAnalyzerResults::responseDataZero;
-                // for MELIBU 2 R/T bit is in id2
-                if( mSettings->mMELIBUVersion == 2.0 )
-                    ack = ack && ( ( id2 & 0x01 ) == 0 );
+                ack = SendAckByte( mSettings->mMELIBUVersion, id1, id2 );
                 add_to_crc = true;
                 byte_order = 1; // second byte
                 break;
             case MELIBUAnalyzerResults::instruction1:
                 mFrameState = MELIBUAnalyzerResults::instruction2;
+
                 add_to_crc = true;
                 byte_order = 0; // first byte
                 break;
             case MELIBUAnalyzerResults::instruction2:
-                mFrameState = MELIBUAnalyzerResults::responseDataZero;
+                if(nDataBytes == 0)
+                    mFrameState = MELIBUAnalyzerResults::responseCRC1;
+                else
+                    mFrameState = MELIBUAnalyzerResults::responseDataZero;
+
                 add_to_crc = true;
                 byte_order = 1; // second byte
                 break;
             case MELIBUAnalyzerResults::responseDataZero:
-                nDataBytes = 1;
+                //nDataBytes = 1;
                 mFrameState = MELIBUAnalyzerResults::responseData;
                 add_to_crc = true;
                 byte_order = 0; // first byte
+                nDataBytes--;
                 break;
             case MELIBUAnalyzerResults::responseData:
                 // calculate number of data bytes that are sent from id1 and id2
                 // if all data bytes are read, read response crc 1 field next
-                if( nDataBytes == numberOfDataBytes( mSettings->mMELIBUVersion, id1, id2 ) - 1 ) {
+                if(nDataBytes == 1)
                     mFrameState = MELIBUAnalyzerResults::responseCRC1;
-                }
-                nDataBytes++;
+                /*if( nDataBytes == numberOfDataBytes( mSettings->mMELIBUVersion, id1, id2 ) - 1 )
+                 * {
+                 *  mFrameState = MELIBUAnalyzerResults::responseCRC1;
+                 * }*/
+                nDataBytes--;
                 add_to_crc = true;
                 byte_order = ( byte_order + 1 ) % 2; // calculate byte order
                 break;
@@ -212,7 +220,7 @@ void MELIBUAnalyzer::WorkerThread() {
                 mCRC.add( byteFrame.mData1 );
         }
 
-        byteFrame.mData2 = nDataBytes;
+        byteFrame.mData2 = numberOfDataBytes( mSettings->mMELIBUVersion, id1, id2 ) - nDataBytes;
         prevByteFrame = byteFrame; // save frame to previous
 
         if( is_start_of_packet )
@@ -332,36 +340,38 @@ void MELIBUAnalyzer::formatValue( std::ostringstream& ss, U64 value, U8 precisio
 U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& framingError ) {
     U32 min_break_field_low_bits = 11; // in MELIBU 2
     if( mSettings->mMELIBUVersion < 2 )
-        min_break_field_low_bits += 2; // in MELIBU 1 minimum break field length is 13 low bits
+        min_break_field_low_bits = 13; // in MELIBU 1 minimum break field length is 13 low bits
+
     U32 num_break_bits = 0;
     bool valid_frame = false;
-    bool toggling = false; // bool indicating that we added unexpected_toggling row to UI table
-    for( ;; ) {
-        mSerial->AdvanceToNextEdge();
-        if( mSerial->GetBitState() == BIT_HIGH ) {
-            // add marker at every rising edge when searching for brak field
-            mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorX, mSettings->mInputChannel );
-            if( !toggling ) { // if there is more toggling before break field add toggling row just once
-                FrameV2 frame_v2;
-                frame_v2.AddBoolean( "header_toggling", true );
-                mResults->AddFrameV2( frame_v2,
-                                      "unexpected_toggling",
-                                      mSerial->GetSampleNumber(),
-                                      mSerial->GetSampleOfNextEdge() );
-                toggling = true;
-            }
-            mSerial->AdvanceToNextEdge();
-        }
-        // do not advance, but only get the sample of next edge and calculate number of low bits
-        num_break_bits =
-            round( ( double )( ( mSerial->GetSampleOfNextEdge() - mSerial->GetSampleNumber() ) / SamplesPerBit() ) );
-        // if number of low bits are greater than minimum frame is valid
-        if( num_break_bits >= min_break_field_low_bits ) {
-            startingSample = mSerial->GetSampleNumber();
-            valid_frame = true;
-            break;
-        }
-    }
+    StartingSampleInBreakField( min_break_field_low_bits, startingSample, num_break_bits, valid_frame );
+    //bool toggling = false; // bool indicating that we added unexpected_toggling row to UI table
+    //for( ;; )
+    //{
+    //    mSerial->AdvanceToNextEdge();
+    //    if( mSerial->GetBitState() == BIT_HIGH )
+    //    {
+    //        // add marker at every rising edge when searching for brak field
+    //        mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorX, mSettings->mInputChannel );
+    //        if( !toggling ) // if there is more toggling before break field add toggling row just once
+    //        {
+    //            FrameV2 frame_v2;
+    //            frame_v2.AddBoolean( "header_toggling", true );
+    //            mResults->AddFrameV2( frame_v2, "unexpected_toggling", mSerial->GetSampleNumber(), mSerial->GetSampleOfNextEdge() );
+    //            toggling = true;
+    //        }
+    //        mSerial->AdvanceToNextEdge();
+    //    }
+    //    // do not advance, but only get the sample of next edge and calculate number of low bits
+    //    num_break_bits = round( ( double )( ( mSerial->GetSampleOfNextEdge() - mSerial->GetSampleNumber() ) / SamplesPerBit() ) );
+    //    // if number of low bits are greater than minimum frame is valid
+    //    if( num_break_bits >= min_break_field_low_bits )
+    //    {
+    //        startingSample = mSerial->GetSampleNumber();
+    //        valid_frame = true;
+    //        break;
+    //    }
+    //}
 
     // sample (add marker) each byte of break field at the middle of bit
     for( U32 i = 0; i < num_break_bits; i++ ) {
@@ -452,6 +462,7 @@ U8 MELIBUAnalyzer::ByteFrame( S64& startingSample, S64& endingSample, bool& fram
         mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorSquare, mSettings->mInputChannel );
         framingError = true;
     }
+
     // advance to end of stop bit (half samples per bit or to sample before falling edge)
     if( mSerial->WouldAdvancingCauseTransition( HalfSamplesPerBit() - 1 ) ) {
         mSerial->AdvanceToAbsPosition( mSerial->GetSampleOfNextEdge() - 1 );
@@ -462,6 +473,48 @@ U8 MELIBUAnalyzer::ByteFrame( S64& startingSample, S64& endingSample, bool& fram
     endingSample = mSerial->GetSampleNumber();
 
     return data;
+}
+
+void MELIBUAnalyzer::StartingSampleInBreakField( U32 minBreakFieldBits,
+                                                 S64& startingSample,
+                                                 U32& num_break_bits,
+                                                 bool& valid_frame ) {
+    bool toggling = false;  // bool indicating that we added unexpected_toggling row to UI table
+    for( ;; ) {
+        mSerial->AdvanceToNextEdge();
+        if( mSerial->GetBitState() == BIT_HIGH ) {
+            // add marker at every rising edge when searching for brak field
+            mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorX, mSettings->mInputChannel );
+            if( !toggling ) { // if there is more toggling before break field add toggling row just once
+                FrameV2 frame_v2;
+                frame_v2.AddBoolean( "header_toggling", true );
+                mResults->AddFrameV2( frame_v2,
+                                      "unexpected_toggling",
+                                      mSerial->GetSampleNumber(),
+                                      mSerial->GetSampleOfNextEdge() );
+                toggling = true;
+            }
+            mSerial->AdvanceToNextEdge();
+        }
+        // do not advance, but only get the sample of next edge and calculate number of low bits
+        num_break_bits =
+            round( ( double )( ( mSerial->GetSampleOfNextEdge() - mSerial->GetSampleNumber() ) / SamplesPerBit() ) );
+        // if number of low bits are greater than minimum frame is valid
+        if( num_break_bits >= minBreakFieldBits ) {
+            startingSample = mSerial->GetSampleNumber();
+            valid_frame = true;
+            break;
+        }
+    }
+}
+
+bool MELIBUAnalyzer::SendAckByte( double MELIBUVersion, U8 idField1, U8 idField2 ) {
+    bool ack;
+    if( mSettings->mMELIBUVersion == 2.0 )
+        ack = mSettings->mACK && ( ( idField2 & 0x01 ) == 0 );
+    else
+        ack = mSettings->mACK && ( ( idField1 & 0x02 ) == 0 );
+    return ack;
 }
 
 U32 MELIBUAnalyzer::GenerateSimulationData( U64 minimum_sample_index,

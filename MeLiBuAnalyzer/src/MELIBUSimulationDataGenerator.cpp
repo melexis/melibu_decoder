@@ -34,7 +34,21 @@ U32 MELIBUSimulationDataGenerator::GenerateSimulationData( U64 largest_sample_re
 void MELIBUSimulationDataGenerator::CreateFrame() {
     U32 samples_per_bit = mSimulationSampleRateHz / mSettings->mBitRate;
     mSerialSimulationData.Advance( samples_per_bit * Random( 1, 4 ) ); // simulate jitter
-    CreateHeader();
+
+    // master to slave: ReqIcStatus
+    CreateBreakField();
+    CreateSerialByte( 0x10 );
+    CreateSerialByte( 0x22 );
+
+    CreateSerialByte( 0x1a );
+    CreateSerialByte( 0x5c );
+    CreateSerialByte( 0x7e ); // ack byte
+
+    // slave to master: IcStatus
+    CreateBreakField();
+    CreateSerialByte( 0x12 );
+    CreateSerialByte( 0x1c );
+
     CreateSerialByte( 0x2a );
     CreateSerialByte( 0xc8 );
     CreateSerialByte( 0x00 );
@@ -54,7 +68,7 @@ void MELIBUSimulationDataGenerator::CreateFrame() {
     CreateSerialByte( 0x00 );
     CreateSerialByte( 0x00 );
 
-    CreateSerialByte( 0xcc );
+    CreateSerialByte( 0x1c );
     CreateSerialByte( 0x2a );
 }
 
