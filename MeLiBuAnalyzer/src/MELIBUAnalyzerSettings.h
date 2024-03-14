@@ -4,6 +4,9 @@
 #include <AnalyzerSettings.h>
 #include <AnalyzerTypes.h>
 #include <fstream>
+#include <map>
+#include <iterator>
+#include <iostream>
 
 class MELIBUAnalyzerSettings: public AnalyzerSettings
 {
@@ -17,10 +20,14 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     void UpdateInterfacesFromSettings();
 
     const char* mbdfFilepath = "";
+    const char* dllFolderPath = "";
+
     Channel mInputChannel = UNDEFINED_CHANNEL;
     double mMELIBUVersion = 1.0;
     U32 mBitRate = 9600;
     bool mACK = false;
+    bool settingsFromMBDF = false;
+    std::map < int, bool > node_ack;
 
  protected:
     std::auto_ptr < AnalyzerSettingInterfaceChannel > mInputChannelInterface;
@@ -29,8 +36,10 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     std::auto_ptr < AnalyzerSettingInterfaceNumberList > mMELIBUVersionInterface;
     std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBUAckEnabledInterface;
 
-    std::string RunPythonMbdfParser( const char* cmd );
+
     std::string getDLLPath();
+    std::string RunPythonMbdfParser( std::string script_path, std::string other_args );
+    void parsePythonOutput( std::string output );
 
     std::ofstream debugFile;
 };

@@ -101,6 +101,7 @@ void MELIBUAnalyzer::WorkerThread() {
         }
         ready_to_save = false;
         add_to_crc = false;
+
         // in each case set mFrameState for next iteration
         switch( mFrameState ) {
             case MELIBUAnalyzerResults::NoFrame:
@@ -127,7 +128,7 @@ void MELIBUAnalyzer::WorkerThread() {
             case MELIBUAnalyzerResults::headerID2:
                 id2 = byteFrame.mData1; // save byte value to id2
                 nDataBytes = numberOfDataBytes( mSettings->mMELIBUVersion, id1, id2 );
-                // ovi uslovi nisu dobri!
+
                 if( nDataBytes == 0 )
                     mFrameState = MELIBUAnalyzerResults::responseCRC1;
                 else
@@ -141,7 +142,6 @@ void MELIBUAnalyzer::WorkerThread() {
                 break;
             case MELIBUAnalyzerResults::instruction1:
                 mFrameState = MELIBUAnalyzerResults::instruction2;
-
                 add_to_crc = true;
                 byte_order = 0; // first byte
                 break;
@@ -150,26 +150,19 @@ void MELIBUAnalyzer::WorkerThread() {
                     mFrameState = MELIBUAnalyzerResults::responseCRC1;
                 else
                     mFrameState = MELIBUAnalyzerResults::responseDataZero;
-
                 add_to_crc = true;
                 byte_order = 1; // second byte
                 break;
             case MELIBUAnalyzerResults::responseDataZero:
-                //nDataBytes = 1;
                 mFrameState = MELIBUAnalyzerResults::responseData;
                 add_to_crc = true;
                 byte_order = 0; // first byte
                 nDataBytes--;
                 break;
             case MELIBUAnalyzerResults::responseData:
-                // calculate number of data bytes that are sent from id1 and id2
                 // if all data bytes are read, read response crc 1 field next
                 if(nDataBytes == 1)
                     mFrameState = MELIBUAnalyzerResults::responseCRC1;
-                /*if( nDataBytes == numberOfDataBytes( mSettings->mMELIBUVersion, id1, id2 ) - 1 )
-                 * {
-                 *  mFrameState = MELIBUAnalyzerResults::responseCRC1;
-                 * }*/
                 nDataBytes--;
                 add_to_crc = true;
                 byte_order = ( byte_order + 1 ) % 2; // calculate byte order
@@ -183,6 +176,7 @@ void MELIBUAnalyzer::WorkerThread() {
                 ready_to_save = !ack; // if we need to read ack byte data is not ready for saving
                 // add second byte to crc; for MELIBU 2 second byte is msb byte, for MELIBU 1 second byte is lsb
                 if( mSettings->mMELIBUVersion == 2.0 )
+
                     crc |= ( byteFrame.mData1 << 8 );
                 else {
                     crc = crc << 8;
@@ -198,27 +192,19 @@ void MELIBUAnalyzer::WorkerThread() {
                 break;
             case MELIBUAnalyzerResults::responseACK:
                 mFrameState = MELIBUAnalyzerResults::NoFrame;
-
-                if( byteFrame.mData1 != 0x7e )
+                if( byteFrame.mData1 != 0x7e ) {
                     mResults->AddMarker( mSerial->GetSampleNumber(),
                                          AnalyzerResults::ErrorSquare,
                                          mSettings->mInputChannel );
-
+                    byteFrame.mFlags |= MELIBUAnalyzerResults::receptionFailed;
+                }
                 showIBS = false;
                 nDataBytes = 0;
                 ready_to_save = true;
                 break;
         }
-        // add byte value to crc if needed
-        if( add_to_crc ) {
-            // for MELIBU 2 add current byte if it is second byte and than add previous
-            if( mSettings->mMELIBUVersion == 2.0 && byte_order == 1 ) {
-                mCRC.add( byteFrame.mData1 );
-                mCRC.add( prevByteFrame.mData1 );
-            }
-            if( mSettings->mMELIBUVersion < 2.0 )
-                mCRC.add( byteFrame.mData1 );
-        }
+
+        AddToCrc( add_to_crc, byte_order, byteFrame, prevByteFrame );
 
         byteFrame.mData2 = numberOfDataBytes( mSettings->mMELIBUVersion, id1, id2 ) - nDataBytes;
         prevByteFrame = byteFrame; // save frame to previous
@@ -227,47 +213,7 @@ void MELIBUAnalyzer::WorkerThread() {
             mResults->CommitPacketAndStartNewPacket(); // commit previous packet
 
         mResults->AddFrame( byteFrame );
-        FrameV2 frame_v2; // frameV2 is used for tabular view of data bytes in UI
-
-        switch( static_cast < MELIBUAnalyzerResults::tMELIBUFrameState > ( byteFrame.mType ) ) {
-            case MELIBUAnalyzerResults::headerID1:
-            case MELIBUAnalyzerResults::headerID2:
-            case MELIBUAnalyzerResults::instruction1:
-            case MELIBUAnalyzerResults::instruction2:
-            case MELIBUAnalyzerResults::responseCRC1:
-            case MELIBUAnalyzerResults::responseCRC2:
-                formatValue( ss, byteFrame.mData1, 2 );
-                frame_v2.AddString( "data", ss.str().c_str() );
-                break;
-            case MELIBUAnalyzerResults::responseACK:
-                formatValue( ss, byteFrame.mData1, 2 );
-                frame_v2.AddString( "data", ss.str().c_str() );
-                frame_v2.AddString( "ack error", "true" );
-                break;
-            // for response data add byte value and index of data in message
-            case MELIBUAnalyzerResults::responseDataZero: // expecting first response data byte.
-            case MELIBUAnalyzerResults::responseData: // expecting response data.
-                formatValue( ss, byteFrame.mData1, 2 );
-                frame_v2.AddString( "data", ss.str().c_str() );
-                formatValue( ss, byteFrame.mData2 - 1, 2 );
-                frame_v2.AddString( "index", ss.str().c_str() );
-                break;
-            default:
-                break;
-        }
-        auto flag_strings = FrameFlagsToString( byteFrame.mFlags );
-        // add flag strings to table
-        for( const auto& flag_string : flag_strings ) {
-            if( flag_string == "crc_mismatch" ) {
-                formatValue( ss, mCRC.result(), 4 );
-                frame_v2.AddString( flag_string.c_str(), ss.str().c_str() );
-            } else
-                frame_v2.AddBoolean( flag_string.c_str(), true );
-        }
-        mResults->AddFrameV2( frame_v2,
-                              FrameTypeToString( static_cast < MELIBUAnalyzerResults::tMELIBUFrameState >
-                                                 ( byteFrame.mType ) ).c_str(),
-                              byteFrame.mStartingSampleInclusive, byteFrame.mEndingSampleInclusive );
+        AddFrameToTable( byteFrame, ss );
 
         if( ready_to_save )
             mResults->CommitPacketAndStartNewPacket();
@@ -303,7 +249,7 @@ U8 MELIBUAnalyzer::numberOfDataBytes( double MELIBUVersion, U8 idField1, U8 idFi
     // function select bit and MELIBU version
     U8 length = 0;
     U8 functionSelect = 0;
-    if( MELIBUVersion == 2 ) {
+    if( MELIBUVersion >= 2 ) {
         functionSelect = idField2 & 0x02; // 0x02 = 0000 0010; extract value in second bit
         length = idField2 & 0x38;         // 0x38 = 0011 1000; extraxt bits on 3, 4 and 5 places
         length = length >> 3;             // right shift to get 3bit value
@@ -345,33 +291,6 @@ U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& 
     U32 num_break_bits = 0;
     bool valid_frame = false;
     StartingSampleInBreakField( min_break_field_low_bits, startingSample, num_break_bits, valid_frame );
-    //bool toggling = false; // bool indicating that we added unexpected_toggling row to UI table
-    //for( ;; )
-    //{
-    //    mSerial->AdvanceToNextEdge();
-    //    if( mSerial->GetBitState() == BIT_HIGH )
-    //    {
-    //        // add marker at every rising edge when searching for brak field
-    //        mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorX, mSettings->mInputChannel );
-    //        if( !toggling ) // if there is more toggling before break field add toggling row just once
-    //        {
-    //            FrameV2 frame_v2;
-    //            frame_v2.AddBoolean( "header_toggling", true );
-    //            mResults->AddFrameV2( frame_v2, "unexpected_toggling", mSerial->GetSampleNumber(), mSerial->GetSampleOfNextEdge() );
-    //            toggling = true;
-    //        }
-    //        mSerial->AdvanceToNextEdge();
-    //    }
-    //    // do not advance, but only get the sample of next edge and calculate number of low bits
-    //    num_break_bits = round( ( double )( ( mSerial->GetSampleOfNextEdge() - mSerial->GetSampleNumber() ) / SamplesPerBit() ) );
-    //    // if number of low bits are greater than minimum frame is valid
-    //    if( num_break_bits >= min_break_field_low_bits )
-    //    {
-    //        startingSample = mSerial->GetSampleNumber();
-    //        valid_frame = true;
-    //        break;
-    //    }
-    //}
 
     // sample (add marker) each byte of break field at the middle of bit
     for( U32 i = 0; i < num_break_bits; i++ ) {
@@ -510,11 +429,80 @@ void MELIBUAnalyzer::StartingSampleInBreakField( U32 minBreakFieldBits,
 
 bool MELIBUAnalyzer::SendAckByte( double MELIBUVersion, U8 idField1, U8 idField2 ) {
     bool ack;
+
+    if( mSettings->settingsFromMBDF ) {
+        U8 slaveAdr = 0;
+        if( mSettings->mMELIBUVersion < 2.0 )
+            slaveAdr = ( idField1 & 0xfc ) >> 2;
+        else
+            slaveAdr = idField1;
+        ack = mSettings->node_ack[ slaveAdr ];
+    } else
+        ack = mSettings->mACK;
+
     if( mSettings->mMELIBUVersion == 2.0 )
-        ack = mSettings->mACK && ( ( idField2 & 0x01 ) == 0 );
+        ack &= ( ( idField2 & 0x01 ) == 0 );
     else
-        ack = mSettings->mACK && ( ( idField1 & 0x02 ) == 0 );
+        ack &= ( ( idField1 & 0x02 ) == 0 );
     return ack;
+}
+
+void MELIBUAnalyzer::AddToCrc( bool addToCrc, U8 byteOrder, Frame byte, Frame prevByte ) {
+    if( addToCrc ) { // add byte value to crc if needed
+        // for MELIBU 2 add current byte if it is second byte and than add previous
+        if( mSettings->mMELIBUVersion == 2.0 && byteOrder == 1 ) {
+            mCRC.add( byte.mData1 );
+            mCRC.add( prevByte.mData1 );
+        }
+        if( mSettings->mMELIBUVersion < 2.0 )
+            mCRC.add( byte.mData1 );
+    }
+}
+
+void MELIBUAnalyzer::AddFrameToTable( Frame f, std::ostringstream& ss ) {
+    FrameV2 frame_v2; // frameV2 is used for tabular view of data bytes in UI
+
+    switch( static_cast < MELIBUAnalyzerResults::tMELIBUFrameState > ( f.mType ) ) {
+        case MELIBUAnalyzerResults::headerID1:
+        case MELIBUAnalyzerResults::headerID2:
+        case MELIBUAnalyzerResults::instruction1:
+        case MELIBUAnalyzerResults::instruction2:
+        case MELIBUAnalyzerResults::responseCRC1:
+        case MELIBUAnalyzerResults::responseCRC2:
+            formatValue( ss, f.mData1, 2 );
+            frame_v2.AddString( "data", ss.str().c_str() );
+            break;
+        case MELIBUAnalyzerResults::responseACK:
+            formatValue( ss, f.mData1, 2 );
+            frame_v2.AddString( "data", ss.str().c_str() );
+            //frame_v2.AddString( "ack error", "true" );
+            break;
+        // for response data add byte value and index of data in message
+        case MELIBUAnalyzerResults::responseDataZero: // expecting first response data byte.
+        case MELIBUAnalyzerResults::responseData: // expecting response data.
+            formatValue( ss, f.mData1, 2 );
+            frame_v2.AddString( "data", ss.str().c_str() );
+            formatValue( ss, f.mData2 - 1, 2 );
+            frame_v2.AddString( "index", ss.str().c_str() );
+            break;
+        default:
+            break;
+    }
+
+    // add flag strings to table
+    auto flag_strings = FrameFlagsToString( f.mFlags );
+    for( const auto& flag_string : flag_strings ) {
+        if( flag_string == "crc_mismatch" ) {
+            formatValue( ss, mCRC.result(), 4 );
+            frame_v2.AddString( flag_string.c_str(), ss.str().c_str() );
+        } else
+            frame_v2.AddBoolean( flag_string.c_str(), true );
+    }
+    mResults->AddFrameV2( frame_v2,
+                          FrameTypeToString(
+                              static_cast < MELIBUAnalyzerResults::tMELIBUFrameState > ( f.mType ) ).c_str(),
+                          f.mStartingSampleInclusive,
+                          f.mEndingSampleInclusive );
 }
 
 U32 MELIBUAnalyzer::GenerateSimulationData( U64 minimum_sample_index,

@@ -32,6 +32,7 @@ class MELIBUAnalyzerResults: public AnalyzerResults
         byteFramingError = 0x01,
         headerBreakExpected = 0x02,
         crcMismatch = 0x04,
+        receptionFailed = 0x08
     } tMELIBUFrameFlags;
 
  public:

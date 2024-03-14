@@ -35,6 +35,8 @@ namespace
             strings.push_back( "header_break_expected" );
         if( flags & MELIBUAnalyzerResults::crcMismatch )
             strings.push_back( "crc_mismatch" );
+        if( flags & MELIBUAnalyzerResults::receptionFailed )
+            strings.push_back( "reception_failed" );
 
         return strings;
     }
@@ -71,6 +73,8 @@ class ANALYZER_EXPORT MELIBUAnalyzer: public Analyzer2
     void StartingSampleInBreakField( U32 minBreakFieldBits, S64& startingSample, U32& num_break_bits,
                                      bool& valid_frame );
     bool SendAckByte( double MELIBUVersion, U8 idField1, U8 idField2 );
+    void AddToCrc( bool addToCrc, U8 byteOrder, Frame byte, Frame prevByte );
+    void AddFrameToTable( Frame f, std::ostringstream& ss );
 
  protected: //vars
     std::auto_ptr < MELIBUAnalyzerSettings > mSettings;

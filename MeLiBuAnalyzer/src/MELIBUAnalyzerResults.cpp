@@ -206,6 +206,13 @@ void MELIBUAnalyzerResults::GenerateFrameTabularText( U64 frame_index, DisplayBa
         std::string bitrate = s1.str();
         AddTabularText( "Bit rate: ", bitrate.c_str(), "\n" );
         writeToTerminal = true;
+
+        std::map < int, bool > ::iterator itr;
+        for( itr = mSettings->node_ack.begin(); itr != mSettings->node_ack.end(); ++itr ) {
+            std::ostringstream s2;
+            s2 << "adress: " << itr->first << ", ack_byte: " << itr->second;
+            AddTabularText( "SLAVE: ", s2.str().c_str() );
+        }
     }
 #endif
 }

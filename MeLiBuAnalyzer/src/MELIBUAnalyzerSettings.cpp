@@ -14,7 +14,13 @@
 
 // set initial values for variables and add input interfaces
 MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
-    : mInputChannel( UNDEFINED_CHANNEL ), mBitRate( 9600 ), mMELIBUVersion( 1.0 ), mACK( false ), mbdfFilepath( "" ) {
+    : mInputChannel( UNDEFINED_CHANNEL ),
+    mBitRate( 9600 ),
+    mMELIBUVersion( 1.0 ),
+    mACK( false ),
+    mbdfFilepath( "" ),
+    dllFolderPath( "" ),
+    settingsFromMBDF( false ) {
     debugFile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt",
                     std::ios_base::app );
     debugFile << "constructor\n";
@@ -79,16 +85,17 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     // get dll path and create path to python script
     std::string dll_path = getDLLPath();
     std::size_t found = dll_path.find_last_of( "/\\" );
+    dllFolderPath = dll_path.substr( 0, found ).c_str();
     std::string python_script_path = dll_path.substr( 0, found ) + "\\read_mbdf.py";
 
     // check if mbdf file path exists
     struct stat sb;
     if( stat( mbdfFilepath, &sb ) == 0 ) { // run python script and save values to vars
-        std::string whole_input = "\"C:\\Program Files (x86)\\Melexis\\Python\\python.exe\" " + python_script_path +
-                                  " " + mbdfFilepath;
-        std::string python_output = RunPythonMbdfParser( whole_input.c_str() );
-        mMELIBUVersion = stod( python_output.substr( 0, python_output.find_first_of( "\n" ) ) );
-        mBitRate = stod( python_output.substr( python_output.find_first_of( "\n" ) + 1 ) );
+        std::string python_output = RunPythonMbdfParser( python_script_path, "" );
+        parsePythonOutput( python_output );
+        /*mMELIBUVersion = stod( python_output.substr( 0, python_output.find_first_of( "\n" ) ) );
+         * mBitRate = stod( python_output.substr( python_output.find_first_of( "\n" ) + 1 ) );*/
+        settingsFromMBDF = true;
     } else {   // save values from UI to vars
         mBitRate = mBitRateInterface->GetInteger();
         mMELIBUVersion = mMELIBUVersionInterface->GetNumber();
@@ -121,6 +128,7 @@ void MELIBUAnalyzerSettings::LoadSettings( const char* settings ) {
     text_archive >> mBitRate;
     text_archive >> mMELIBUVersion;
     text_archive >> mACK;
+    //text_archive >> ( char const** )mbdfFilepath;
     mbdfFilepath = text_archive.GetString();
 
     ClearChannels();
@@ -141,10 +149,12 @@ const char* MELIBUAnalyzerSettings::SaveSettings() {
     return SetReturnString( text_archive.GetString() );
 }
 
-std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( const char* cmd ) {
+std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path, std::string other_args ) {
+    std::string whole_input = "\"C:\\Program Files (x86)\\Melexis\\Python\\python.exe\" " + script_path + " " +
+                              mbdfFilepath + " " + other_args;
     std::array < char, 128 > buffer;
     std::string result;
-    std::shared_ptr < FILE > pipe( _popen( cmd, "r" ), _pclose );
+    std::shared_ptr < FILE > pipe( _popen( whole_input.c_str(), "r" ), _pclose );
     if( !pipe ) {
         throw std::runtime_error( "popen() failed!" );
     }
@@ -154,6 +164,28 @@ std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( const char* cmd ) {
         }
     }
     return result;
+}
+
+void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
+    mMELIBUVersion = stod( output.substr( 0, output.find_first_of( "\n" ) ) );
+    output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
+    mBitRate = stod( output.substr( 0, output.find_first_of( "\n" ) ) );
+    output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
+    while( output != "" ) {
+        U8 slaveAdr = stoi( output.substr( 0, output.find_first_of( "\n" ) ) );
+        output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
+        std::string s;
+        if( output.find_first_of( "\n" ) != std::string::npos ) {
+            s = output.substr( 0, output.find_first_of( "\n" ) );
+            output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
+        } else {
+            s = output;
+            output = "";
+        }
+
+        bool ack = s == "True" ? true : false;
+        node_ack.insert( std::pair < U8, bool > ( slaveAdr, ack ) );
+    }
 }
 
 std::string MELIBUAnalyzerSettings::getDLLPath() {

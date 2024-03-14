@@ -70,6 +70,125 @@ void MELIBUSimulationDataGenerator::CreateFrame() {
 
     CreateSerialByte( 0x1c );
     CreateSerialByte( 0x2a );
+
+    // master to slave: ReqIcStatus; wrong crc byte; ack byte received 7E
+    CreateBreakField();
+    CreateSerialByte( 0x10 );
+    CreateSerialByte( 0x22 );
+
+    CreateSerialByte( 0x1a );
+    CreateSerialByte( 0x55 );
+    CreateSerialByte( 0x7e ); // ack byte
+
+    // slave to master: IcStatus; wrong crc
+    CreateBreakField();
+    CreateSerialByte( 0x12 );
+    CreateSerialByte( 0x1c );
+
+    CreateSerialByte( 0x2a );
+    CreateSerialByte( 0xc8 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x2c );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x02 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x0d );
+    CreateSerialByte( 0x01 );
+    CreateSerialByte( 0x0b );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0xb5 );
+    CreateSerialByte( 0x29 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+
+    CreateSerialByte( 0x11 );
+    CreateSerialByte( 0x2a );
+
+    // master to slave: ReqIcStatus; expected ack byte but no is received
+    CreateBreakField();
+    CreateSerialByte( 0x10 );
+    CreateSerialByte( 0x22 );
+
+    CreateSerialByte( 0x1a );
+    CreateSerialByte( 0x5c );
+    //CreateSerialByte( 0x7e ); // ack byte
+
+    // master to slave: ReqIcStatus; received ack byte but value is not 7E
+    CreateBreakField();
+    CreateSerialByte( 0x10 );
+    CreateSerialByte( 0x22 );
+
+    CreateSerialByte( 0x1a );
+    CreateSerialByte( 0x5c );
+    CreateSerialByte( 0x00 ); // ack byte
+
+    // slave to master: IcStatus; not nough bytes received
+    CreateBreakField();
+    CreateSerialByte( 0x12 );
+    CreateSerialByte( 0x1c );
+
+    CreateSerialByte( 0x2a );
+    CreateSerialByte( 0xc8 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x2c );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x02 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x0d );
+    CreateSerialByte( 0x01 );
+    CreateSerialByte( 0x0b );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0xb5 );
+    CreateSerialByte( 0x29 );
+    //CreateSerialByte( 0x00 );
+    //CreateSerialByte( 0x00 );
+
+    CreateSerialByte( 0x1c );
+    CreateSerialByte( 0x2a );
+
+    // master to slave: ReqIcStatus
+    CreateBreakField();
+    CreateSerialByte( 0x10 );
+    CreateSerialByte( 0x22 );
+
+    CreateSerialByte( 0x1a );
+    CreateSerialByte( 0x5c );
+    CreateSerialByte( 0x7e ); // ack byte
+
+    // slave to master: IcStatus; more bytes than needed
+    CreateBreakField();
+    CreateSerialByte( 0x12 );
+    CreateSerialByte( 0x1c );
+
+    CreateSerialByte( 0x2a );
+    CreateSerialByte( 0xc8 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x2c );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x02 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x0d );
+    CreateSerialByte( 0x01 );
+    CreateSerialByte( 0x0b );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0xb5 );
+    CreateSerialByte( 0x29 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+    CreateSerialByte( 0x00 );
+
+    CreateSerialByte( 0x1c );
+    CreateSerialByte( 0x2a );
 }
 
 void MELIBUSimulationDataGenerator::CreateHeader() {
