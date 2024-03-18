@@ -3,6 +3,7 @@
 
 #include <AnalyzerSettings.h>
 #include <AnalyzerTypes.h>
+#include <AnalyzerHelpers.h>
 #include <fstream>
 #include <map>
 #include <iterator>
@@ -15,19 +16,22 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     virtual ~MELIBUAnalyzerSettings();
 
     virtual bool SetSettingsFromInterfaces();
+    // looks like these three functions are not called from logic application
     virtual void LoadSettings( const char* settings );
     virtual const char* SaveSettings();
     void UpdateInterfacesFromSettings();
 
-    const char* mbdfFilepath = "";
-    const char* dllFolderPath = "";
+    // variables to store UI inputs
+    Channel mInputChannel;
+    const char* mMbdfFilepath;
+    U32 mBitRate;
+    double mMELIBUVersion;
+    bool mACK;
+    bool mLoadSettingsFromMbdf;
 
-    Channel mInputChannel = UNDEFINED_CHANNEL;
-    double mMELIBUVersion = 1.0;
-    U32 mBitRate = 9600;
-    bool mACK = false;
-    bool settingsFromMBDF = false;
     std::map < int, bool > node_ack;
+    const char* dllFolderPath;
+    bool settingsFromMBDF;
 
  protected:
     std::auto_ptr < AnalyzerSettingInterfaceChannel > mInputChannelInterface;
@@ -35,13 +39,11 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     std::auto_ptr < AnalyzerSettingInterfaceInteger > mBitRateInterface;
     std::auto_ptr < AnalyzerSettingInterfaceNumberList > mMELIBUVersionInterface;
     std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBUAckEnabledInterface;
-
+    std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBULoadFromMbdfInterface;
 
     std::string getDLLPath();
     std::string RunPythonMbdfParser( std::string script_path, std::string other_args );
     void parsePythonOutput( std::string output );
-
-    std::ofstream debugFile;
 };
 
 #endif //MELIBU_ANALYZER_SETTINGS
