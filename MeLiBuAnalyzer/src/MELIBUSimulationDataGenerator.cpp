@@ -2,6 +2,12 @@
 #include "MELIBUAnalyzerSettings.h"
 
 #include <AnalyzerHelpers.h>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <regex>
+
+#include <Windows.h>
 
 MELIBUSimulationDataGenerator::MELIBUSimulationDataGenerator() {}
 
@@ -14,6 +20,8 @@ void MELIBUSimulationDataGenerator::Initialize( U32 simulation_sample_rate, MELI
     mSerialSimulationData.SetChannel( mSettings->mInputChannel );
     mSerialSimulationData.SetSampleRate( simulation_sample_rate );
     mSerialSimulationData.SetInitialBitState( BIT_HIGH );
+
+    ReadSimulationBytes(); // read messages from simulated_data.csv and save to simulation_bytes vector
 }
 
 U32 MELIBUSimulationDataGenerator::GenerateSimulationData( U64 largest_sample_requested,
@@ -35,167 +43,22 @@ void MELIBUSimulationDataGenerator::CreateFrame() {
     U32 samples_per_bit = mSimulationSampleRateHz / mSettings->mBitRate;
     mSerialSimulationData.Advance( samples_per_bit * Random( 1, 4 ) ); // simulate jitter
 
-    // master to slave: ReqIcStatus
-    CreateBreakField();
-    CreateSerialByte( 0x10 );
-    CreateSerialByte( 0x22 );
+    // iterate through simulaton bytes - vector of vectors of string
+    // each vector is one message with more data to generate
+    for( std::vector < std::vector < std::string >> ::iterator frame = simulation_bytes.begin();
+         frame != simulation_bytes.end();
+         ++frame ) {
+        CreateBreakField(); // create break field before every message
+        for( std::vector < std::string > ::iterator byte = ( *frame ).begin(); byte != ( *frame ).end(); ++byte ) {
+            std::regex reg( "^[0-9a-fA-F]{1,2}$" );
+            if( std::regex_match( *byte, reg ) )
+                CreateSerialByte( stoi( *byte, 0, 16 ) );
 
-    CreateSerialByte( 0x1a );
-    CreateSerialByte( 0x5c );
-    CreateSerialByte( 0x7e ); // ack byte
-
-    // slave to master: IcStatus
-    CreateBreakField();
-    CreateSerialByte( 0x12 );
-    CreateSerialByte( 0x1c );
-
-    CreateSerialByte( 0x2a );
-    CreateSerialByte( 0xc8 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x2c );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x02 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x0d );
-    CreateSerialByte( 0x01 );
-    CreateSerialByte( 0x0b );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0xb5 );
-    CreateSerialByte( 0x29 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-
-    CreateSerialByte( 0x1c );
-    CreateSerialByte( 0x2a );
-
-    // master to slave: ReqIcStatus; wrong crc byte; ack byte received 7E
-    CreateBreakField();
-    CreateSerialByte( 0x10 );
-    CreateSerialByte( 0x22 );
-
-    CreateSerialByte( 0x1a );
-    CreateSerialByte( 0x55 );
-    CreateSerialByte( 0x7e ); // ack byte
-
-    // slave to master: IcStatus; wrong crc
-    CreateBreakField();
-    CreateSerialByte( 0x12 );
-    CreateSerialByte( 0x1c );
-
-    CreateSerialByte( 0x2a );
-    CreateSerialByte( 0xc8 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x2c );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x02 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x0d );
-    CreateSerialByte( 0x01 );
-    CreateSerialByte( 0x0b );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0xb5 );
-    CreateSerialByte( 0x29 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-
-    CreateSerialByte( 0x11 );
-    CreateSerialByte( 0x2a );
-
-    // master to slave: ReqIcStatus; expected ack byte but no is received
-    CreateBreakField();
-    CreateSerialByte( 0x10 );
-    CreateSerialByte( 0x22 );
-
-    CreateSerialByte( 0x1a );
-    CreateSerialByte( 0x5c );
-    //CreateSerialByte( 0x7e ); // ack byte
-
-    // master to slave: ReqIcStatus; received ack byte but value is not 7E
-    CreateBreakField();
-    CreateSerialByte( 0x10 );
-    CreateSerialByte( 0x22 );
-
-    CreateSerialByte( 0x1a );
-    CreateSerialByte( 0x5c );
-    CreateSerialByte( 0x00 ); // ack byte
-
-    // slave to master: IcStatus; not nough bytes received
-    CreateBreakField();
-    CreateSerialByte( 0x12 );
-    CreateSerialByte( 0x1c );
-
-    CreateSerialByte( 0x2a );
-    CreateSerialByte( 0xc8 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x2c );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x02 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x0d );
-    CreateSerialByte( 0x01 );
-    CreateSerialByte( 0x0b );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0xb5 );
-    CreateSerialByte( 0x29 );
-    //CreateSerialByte( 0x00 );
-    //CreateSerialByte( 0x00 );
-
-    CreateSerialByte( 0x1c );
-    CreateSerialByte( 0x2a );
-
-    // master to slave: ReqIcStatus
-    CreateBreakField();
-    CreateSerialByte( 0x10 );
-    CreateSerialByte( 0x22 );
-
-    CreateSerialByte( 0x1a );
-    CreateSerialByte( 0x5c );
-    CreateSerialByte( 0x7e ); // ack byte
-
-    // slave to master: IcStatus; more bytes than needed
-    CreateBreakField();
-    CreateSerialByte( 0x12 );
-    CreateSerialByte( 0x1c );
-
-    CreateSerialByte( 0x2a );
-    CreateSerialByte( 0xc8 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x2c );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x02 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x0d );
-    CreateSerialByte( 0x01 );
-    CreateSerialByte( 0x0b );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0xb5 );
-    CreateSerialByte( 0x29 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-    CreateSerialByte( 0x00 );
-
-    CreateSerialByte( 0x1c );
-    CreateSerialByte( 0x2a );
-}
-
-void MELIBUSimulationDataGenerator::CreateHeader() {
-    // break field + id fields (1 and 2)
-    CreateBreakField();
-    CreateSerialByte( 0x12 );
-    CreateSerialByte( 0x1c );
+            reg = "^-[0-9a-fA-F]{1,2}$"; // this is for creating byte with wrong stop bit
+            if( std::regex_match( *byte, reg ) )
+                CreateSerialByteWrongStop( stoi( ( *byte ).erase( 0, 1 ), 0, 16 ) );
+        }
+    }
 }
 
 void MELIBUSimulationDataGenerator::CreateBreakField() {
@@ -239,7 +102,6 @@ void MELIBUSimulationDataGenerator::CreateBreakField() {
 void MELIBUSimulationDataGenerator::CreateSerialByte( U8 byte ) {
     U32 samples_per_bit = mSimulationSampleRateHz / mSettings->mBitRate;
 
-    //mChecksum.add( byte );
     if(mSettings->mMELIBUVersion == 2.0)
         SwapEnds( byte );
 
@@ -249,7 +111,6 @@ void MELIBUSimulationDataGenerator::CreateSerialByte( U8 byte ) {
 
     // start bit...
     mSerialSimulationData.TransitionIfNeeded( BIT_LOW );
-    //mSerialSimulationData.Transition();               // low-going edge for start bit
     mSerialSimulationData.Advance( samples_per_bit ); // add start bit time
 
     U8 mask = 0x1 << 7;
@@ -278,7 +139,67 @@ void MELIBUSimulationDataGenerator::SwapEnds( U8& byte ) {
     byte = t;
 }
 
-// not in use
 U32 MELIBUSimulationDataGenerator::Random( U32 min, U32 max ) {
     return min + ( rand() % ( max - min + 1 ) );
+}
+
+void MELIBUSimulationDataGenerator::CreateSerialByteWrongStop( U8 byte ) {
+    U32 samples_per_bit = mSimulationSampleRateHz / mSettings->mBitRate;
+
+    // mChecksum.add( byte );
+    if( mSettings->mMELIBUVersion == 2.0 )
+        SwapEnds( byte );
+
+    // inter-byte space.....
+    // mSerialSimulationData.TransitionIfNeeded( BIT_HIGH );
+    // mSerialSimulationData.Advance( samples_per_bit );
+
+    // start bit...
+    mSerialSimulationData.TransitionIfNeeded( BIT_LOW );
+    // mSerialSimulationData.Transition();               // low-going edge for start bit
+    mSerialSimulationData.Advance( samples_per_bit ); // add start bit time
+
+    U8 mask = 0x1 << 7;
+    for( U32 i = 0; i < 8; i++ ) {
+        if( ( byte & mask ) != 0 )
+            mSerialSimulationData.TransitionIfNeeded( BIT_HIGH );
+        else
+            mSerialSimulationData.TransitionIfNeeded( BIT_LOW );
+
+        mSerialSimulationData.Advance( samples_per_bit );
+        mask = mask >> 1;
+    }
+
+    // stop bit...
+    mSerialSimulationData.TransitionIfNeeded( BIT_LOW );
+    mSerialSimulationData.Advance( samples_per_bit );
+}
+
+void helper() {}; // this is only for finding path of dll; this function can't be class member function
+
+void MELIBUSimulationDataGenerator::ReadSimulationBytes() {
+    char path[ MAX_PATH ];
+    HMODULE hm = NULL;
+    GetModuleHandleEx( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       ( LPCSTR )&helper,
+                       &hm );
+    GetModuleFileName( hm, path, sizeof( path ) );
+    std::string filepath = path;
+    std::size_t found = filepath.find_last_of( "/\\" );
+    filepath = filepath.substr( 0, found ) + "\\simulated_data.csv";
+
+    std::fstream fin;
+    fin.open( filepath, std::ios::in );
+    std::string line;
+    while( std::getline( fin, line ) ) {
+        // one line has more hex numbers in message separated with comma
+        std::vector < std::string > bytes_in_line;
+        std::string byte;
+        std::stringstream ss(line);
+        // read element from line and save to byte
+        while( std::getline( ss, byte, ',' ) )
+            bytes_in_line.push_back( byte ); // add to vector of bytes in message
+
+        simulation_bytes.push_back( bytes_in_line ); // add message vector to vector of messages
+    }
 }

@@ -80,19 +80,15 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
 
 MELIBUAnalyzerSettings::~MELIBUAnalyzerSettings() {}
 
-void helperFcn() {};
-
 bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     // set vars from UI
     mInputChannel = mInputChannelInterface->GetChannel();
     mMbdfFilepath = mMbdfFileInterface->GetText();
     mACK = mMELIBUAckEnabledInterface->GetValue();
-    mBitRate = mBitRateInterface->GetInteger();
-    mMELIBUVersion = mMELIBUVersionInterface->GetNumber();
     mLoadSettingsFromMbdf = mMELIBULoadFromMbdfInterface->GetValue();
 
-    settingsFromMBDF = false;
-    node_ack.clear();
+    settingsFromMBDF = false; // reset
+    node_ack.clear(); // empty (node,ack) map
 
     // get dll path and create path to python script
     std::string dll_path = getDLLPath();
@@ -104,8 +100,11 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     struct stat sb;
     if( ( stat( mMbdfFilepath, &sb ) == 0 ) && mLoadSettingsFromMbdf ) { // run python script and save values to vars
         std::string python_output = RunPythonMbdfParser( python_script_path, "" );
-        parsePythonOutput( python_output ); // parse python putput and save values to class variables
+        parsePythonOutput( python_output ); // parse python output and save values to class variables
         settingsFromMBDF = true;
+    } else {
+        mBitRate = mBitRateInterface->GetInteger();
+        mMELIBUVersion = mMELIBUVersionInterface->GetNumber();
     }
     ClearChannels();
     AddChannel( mInputChannel, "MeLiBu analyzer", true );
@@ -152,9 +151,8 @@ const char* MELIBUAnalyzerSettings::SaveSettings() {
 
 std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path, std::string other_args ) {
     std::string python_exe_path = dllFolderPath;
-    python_exe_path += "\\Melexis\\Python\\python.exe ";
-    //std::string whole_input = "\"C:\\Program Files (x86)\\Melexis\\Python\\python.exe\" " + script_path + " " + mbdfFilepath + " " + other_args;
-    std::string whole_input = python_exe_path + script_path + " " + mMbdfFilepath + " " + other_args;
+    python_exe_path += "\\Melexis\\Python\\python.exe";
+    std::string whole_input = python_exe_path + " " + script_path + " " + mMbdfFilepath + " " + other_args;
     std::array < char, 128 > buffer;
     std::string result;
     std::shared_ptr < FILE > pipe( _popen( whole_input.c_str(), "r" ), _pclose );
@@ -189,16 +187,9 @@ void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
         bool ack = s == "True" ? true : false;
         node_ack.insert( std::pair < U8, bool > ( slaveAdr, ack ) );
     }
-
-    std::ofstream myfile;
-    myfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt" );
-    myfile << "Writing this to a file.\n";
-    std::map < int, bool > ::iterator itr;
-    for( itr = node_ack.begin(); itr != node_ack.end(); ++itr ) {
-        myfile << itr->first << " " << itr->second << "\n";
-    }
-    myfile.close();
 }
+
+void helperFcn() {};
 
 std::string MELIBUAnalyzerSettings::getDLLPath() {
     char path[ MAX_PATH ];

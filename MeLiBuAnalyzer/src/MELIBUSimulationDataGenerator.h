@@ -3,6 +3,7 @@
 
 #include <SimulationChannelDescriptor.h>
 #include <string>
+#include <vector>
 #include "MELIBUCrc.h"
 class MELIBUAnalyzerSettings;
 
@@ -21,13 +22,18 @@ class MELIBUSimulationDataGenerator
     MELIBUAnalyzerSettings* mSettings;
     U32 mSimulationSampleRateHz;
 
+    std::vector < std::vector < std::string >> simulation_bytes;
+
  protected:
     void CreateFrame();
-    void CreateHeader();
     void CreateBreakField();
     void CreateSerialByte( U8 byte );
     void SwapEnds( U8& byte );
     U32 Random( U32 min, U32 max );
+
+    void CreateSerialByteWrongStop( U8 byte );
+
+    void ReadSimulationBytes();
 
     SimulationChannelDescriptor mSerialSimulationData;
     MELIBUCrc mCRC;
