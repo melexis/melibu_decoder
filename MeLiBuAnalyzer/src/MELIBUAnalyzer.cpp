@@ -28,6 +28,13 @@ void MELIBUAnalyzer::SetupResults() {
 }
 
 void MELIBUAnalyzer::WorkerThread() {
+    std::ofstream outfile;
+
+    outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt",
+                  std::ios_base::app );                                                                                          // append instead of overwrite
+    outfile << "Samples per bit " << SamplesPerBit() << "\n";
+    outfile << "Sample rate " << GetSampleRate() << "\n";
+
     mFrameState = MELIBUAnalyzerResults::NoFrame;
     bool showIBS = false; // show inter byte space
     U8 nDataBytes = 0;    // number of data in message
@@ -63,8 +70,8 @@ void MELIBUAnalyzer::WorkerThread() {
 
         if( is_data_really_break ) // break field found insted of byte frame; this is not regular situation
             AddMissingByteFrame( showIBS, ibsFrame );
-        if( showIBS )
-            mResults->AddFrame( ibsFrame );
+        //if( showIBS )
+        //    mResults->AddFrame( ibsFrame );
 
         is_start_of_packet = false;
         ready_to_save = false;
@@ -140,6 +147,7 @@ void MELIBUAnalyzer::WorkerThread() {
                 break;
             case MELIBUAnalyzerResults::responseCRC2:
                 mFrameState = ack ? MELIBUAnalyzerResults::responseACK : MELIBUAnalyzerResults::NoFrame;
+                showIBS = ack ? true : false;
                 ready_to_save = !ack; // if we need to read ack byte data is not ready for saving
                 CrcFrameValue( crc, byteFrame.mData1, 1 );
 
@@ -362,13 +370,21 @@ U8 MELIBUAnalyzer::ByteFrame( S64& startingSample, S64& endingSample, bool& fram
     }
 
     // advance to end of stop bit (half samples per bit or to sample before falling edge)
-    if( mSerial->WouldAdvancingCauseTransition( HalfSamplesPerBit() - 1 ) ) {
-        mSerial->AdvanceToAbsPosition( mSerial->GetSampleOfNextEdge() - 1 );
-        mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorX, mSettings->mInputChannel );
-    } else
-        mSerial->Advance( HalfSamplesPerBit() - 1 );
+    if( mSerial->GetSampleOfNextEdge() - mSerial->GetSampleNumber() > HalfSamplesPerBit() )
+        endingSample = mSerial->GetSampleNumber() + HalfSamplesPerBit();
+    else
+        endingSample = mSerial->GetSampleOfNextEdge();
 
-    endingSample = mSerial->GetSampleNumber();
+    mSerial->AdvanceToAbsPosition( mSerial->GetSampleOfNextEdge() - 1 );
+    //if( mSerial->WouldAdvancingCauseTransition( HalfSamplesPerBit() ) )
+    //{
+    //    mSerial->AdvanceToAbsPosition( mSerial->GetSampleOfNextEdge() - 1 );
+    //    mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorX, mSettings->mInputChannel );
+    //}
+    //else
+    //    mSerial->Advance( HalfSamplesPerBit() );
+
+    //endingSample = mSerial->GetSampleNumber() + 1;
 
     return data;
 }

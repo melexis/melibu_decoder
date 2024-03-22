@@ -75,7 +75,6 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
 
     ClearChannels();
     AddChannel( mInputChannel, "Serial", false );
-
 }
 
 MELIBUAnalyzerSettings::~MELIBUAnalyzerSettings() {}
@@ -186,6 +185,13 @@ void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
 
         bool ack = s == "True" ? true : false;
         node_ack.insert( std::pair < U8, bool > ( slaveAdr, ack ) );
+    }
+
+    std::ofstream outfile;
+    outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt",
+                  std::ios_base::app );                                                                                          // append instead of overwrite
+    for( std::map < int, bool > ::iterator itr = node_ack.begin(); itr != node_ack.end(); ++itr ) {
+        outfile << itr->first << " " << itr->second << "\n";
     }
 }
 

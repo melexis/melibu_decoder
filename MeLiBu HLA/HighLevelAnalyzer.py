@@ -90,7 +90,7 @@ class Hla(HighLevelAnalyzer):
             curr_frame = self.model.frames.get(frame_name)
             
             f_type = 0
-            if curr_frame.function_type == "LED":
+            if curr_frame.function_type != "DATA":
                 f_type = 1
             
             if(f_type == 0):
