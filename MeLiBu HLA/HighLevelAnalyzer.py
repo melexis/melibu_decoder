@@ -19,6 +19,7 @@ from time import sleep
 from pymbdfparser import ParserApplication
 from pymbdfparser.model import CommandFrameMelibu1, LedFrameMelibu1, FrameMelibu2
 from pymbdfparser.model.script_frame import ScriptFrameBase
+from pymbdfparser.model.signal_encoding_type import PhysicalEncoding
 
 from ast import literal_eval
 
@@ -90,7 +91,7 @@ class Hla(HighLevelAnalyzer):
             curr_frame = self.model.frames.get(frame_name)
             
             f_type = 0
-            if curr_frame.function_type != "DATA":
+            if curr_frame.function_type != "Command":
                 f_type = 1
             
             if(f_type == 0):
@@ -226,9 +227,14 @@ class Hla(HighLevelAnalyzer):
                     # add chunk_value to whole signal value
                     sig_value = (sig_value << local_size) | chunk_value
                     
-                # sig.bus_value(sig_value)
-                physical_value = sig.signal.decode(sig_value)
-                    
+                physical_value = 'None'
+                if sig.signal.encoding_type != None:
+                    for encoding in sig.signal.encoding_type.encodings:
+                        if encoding.__class__.__name__ == 'PhysicalEncoding':
+                            if encoding.min_value <= sig_value <= encoding.max_value:
+                                physical_value = sig.signal.decode(sig_value)
+                            break            
+    
                 # calculate delta time between start time of first data frame and startand end of extracted raw values frames
                 delta_start = GraphTimeDelta(second = (offset + (offset // 8) * 2 + 1) * delta_per_bit)
                 delta_end = GraphTimeDelta(second = (offset + (offset // 8) * 2 + size + (size // 8) * 2 - 1) * delta_per_bit)
