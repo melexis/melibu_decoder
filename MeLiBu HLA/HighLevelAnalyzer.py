@@ -43,6 +43,9 @@ class Hla(HighLevelAnalyzer):
         },
         'raw data': {
             'format': 'raw value: {{data.raw_value}}'
+        },
+        'error': {
+            'format': 'ERROR: {{data.error_type}}'
         }
     }
 
@@ -52,7 +55,13 @@ class Hla(HighLevelAnalyzer):
         Settings can be accessed using the same name used above.
         '''
         # run python mbdf parser and save protocol version
-        path = Path(self.mbdf_filepath)
+        path = self.mbdf_filepath
+        if (path[0] == '\"') | (path[0] == '\''):
+            path = path[1:]
+        if (path[-1] == '\"') | (path[-1] == '\''):
+            path = path[:-1]
+        print(path)
+        path = Path(path)
         app = ParserApplication(path)
         app.run()
         self.model = app.model
@@ -264,8 +273,10 @@ class Hla(HighLevelAnalyzer):
             return self.decode_data(frame)
         elif frame.type == 'data':
             return AnalyzerFrame('raw data', frame.start_time, frame.end_time, {'raw_value': frame.data['data']})
-        else:
+        elif (frame.type == 'crc1') | (frame.type == 'crc2') | (frame.type == 'ack'):
             # Return the data frame itself
             return AnalyzerFrame(frame.type, frame.start_time, frame.end_time)
+        else:
+            return AnalyzerFrame('error', frame.start_time, frame.end_time, {'error_type': frame.type})
     
     
