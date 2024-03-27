@@ -67,6 +67,9 @@ class Hla(HighLevelAnalyzer):
         self.model = app.model
         self.protocol_version = self.model.bus_protocol_version
         
+        self.found_slave = False
+        self.matched_frame = False
+        
     def calculate_data_length_melibu1(self, frame_size, function_select):
         
         self.data_length = bin(frame_size).count("1") * 6
@@ -202,53 +205,54 @@ class Hla(HighLevelAnalyzer):
             delta_time_float = delta_time.__float__()                                 # convert GraphTimeDelta to float [s]
             delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
             
-            for sig in self.current_frame.signal_chunks_big_endian:
-                sig_value = 0 # initialize raw signal value
-                
-                # name = sig.signal.name
-                # offset = sig.offset
-                # size = sig.signal.size
+            signals = sorted(self.current_frame.signal_chunks_big_endian, key = lambda x: x.significance, reverse = False) 
+            signals_dict = dict()
+            for sig in signals:
                 name = sig.signal.name
                 offset = sig.real_offset
                 size = sig.size
                 
-                temp_size = size
-                temp_offset = offset
-                # iterate through data array frames that have parts of signal value 
-                for i in range(offset//8, (size + offset + 1)//8 ):
-                    curr_frame = self.data_array[i] # index frame
-                    array_value = literal_eval((curr_frame.data['data'])) # extract frame value
-                    
-                    # calculate offset and size of part of signal value in current frame
-                    local_offset = temp_offset % 8
-                    local_size = 0
-                    if temp_size > (8 - local_offset):
-                        local_size = 8 - local_offset
-                    else:
-                        local_size = temp_size
-                    mask = (255 >> local_offset) & (255 << (8 - local_size - local_offset)) # mask for extracting part of signal value in frame 
-                    chunk_value = array_value & mask
-                    
-                    # update temp size and temp offset
-                    temp_size = temp_size - local_size
-                    temp_offset = temp_offset + local_size
-                    
-                    # add chunk_value to whole signal value
-                    sig_value = (sig_value << local_size) | chunk_value
-                    
-                physical_value = 'None'
-                if sig.signal.encoding_type != None:
-                    for encoding in sig.signal.encoding_type.encodings:
-                        if encoding.__class__.__name__ == 'PhysicalEncoding':
-                            if encoding.min_value <= sig_value <= encoding.max_value:
-                                physical_value = sig.signal.decode(sig_value)
-                            break            
-    
-                # calculate delta time between start time of first data frame and startand end of extracted raw values frames
-                delta_start = GraphTimeDelta(second = (offset + (offset // 8) * 2 + 1) * delta_per_bit)
-                delta_end = GraphTimeDelta(second = (offset + (offset // 8) * 2 + size + (size // 8) * 2 - 1) * delta_per_bit)
+                value = 0
+                mask = 0
+                for i in range(offset//8, (offset + size - 1)//8 + 1):
+                    value = (value << 8) | literal_eval((self.data_array[i].data['data']))
+                    mask = (mask << 8) | 255
+                number_size = 8 * ((offset + size - 1)//8 - offset//8 + 1)
+                mask = (mask >> (offset % 8)) & (mask << (number_size - size - offset % 8))
+                value = value & mask
+                value = value >> (number_size - size - offset % 8)
                 
-                frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': name,'raw_value': hex(sig_value), 'actual_value': physical_value}))
+                if name in signals_dict:
+                    signals_dict[name] = (signals_dict[name] << size) | value
+                else:
+                    signals_dict[name] = value
+                    
+            signals = sorted(self.current_frame.signal_chunks_big_endian, key=lambda x: x.real_offset, reverse=False)
+            added_signals = []
+            for sig in signals:
+                if sig.signal.name not in added_signals:
+                    added_signals.append(sig.signal.name)
+                    physical_value = 'None'
+                    if sig.signal.encoding_type != None:
+                        for encoding in sig.signal.encoding_type.encodings:
+                            if encoding.__class__.__name__ == 'PhysicalEncoding':
+                                if encoding.min_value <= signals_dict[sig.signal.name] <= encoding.max_value:
+                                    physical_value = sig.signal.decode(signals_dict[sig.signal.name])
+                                break
+                            else:
+                                physical_value = sig.signal.decode(signals_dict[sig.signal.name])
+                    else:
+                        physical_value = sig.signal.decode(signals_dict[sig.signal.name])
+            
+                    # calculate delta time between start time of first data frame and start and end of extracted raw values frames
+                    
+                    # offset = real_offset + start bit and stop bit of data before + start bit of current data
+                    delta_start = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1) * delta_per_bit)
+                    
+                    # offset = real_offset + start bit and stop bit of data before + start bit of current data + signal size + start and stop bit of transitions between data bytes
+                    delta_end = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1 + sig.size + ((sig.real_offset % 8 + sig.size - 1) // 8) * 2) * delta_per_bit)
+                        
+                    frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': sig.signal.name,'raw_value': hex(signals_dict[sig.signal.name]), 'actual_value': physical_value}))
             
             return frames
                 
@@ -262,7 +266,6 @@ class Hla(HighLevelAnalyzer):
 
         The type and data values in `frame` will depend on the input analyzer.
         '''
-        
         if frame.type == 'header_break':
             return AnalyzerFrame('header break', frame.start_time, frame.end_time)
         elif frame.type == 'header_ID1':
