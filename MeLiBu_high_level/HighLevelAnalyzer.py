@@ -111,6 +111,7 @@ class Hla(HighLevelAnalyzer):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
             if self.matched_frame == True & self.found_slave == True:
+                self.data_length = self.current_frame.size
                 return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str})
             
         # if we are here that means no matching fram has ben found and we will return unknown frame
@@ -190,12 +191,12 @@ class Hla(HighLevelAnalyzer):
         self.current_frame = self.model.frames.get(list(self.model.frames.keys())[0])  
         if self.protocol_version < 2.0:
             slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu1()
-            self.calculate_data_length_melibu1(frame_size, func)
+            # self.calculate_data_length_melibu1(frame_size, func)
             self.check_slave(slave_adr)
             return self.match_frame_melibu1(frame, rt, func, inst, frame_size)       
         else:
             slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu2()
-            self.calculate_data_length_melibu2(frame_size, func)
+            # self.calculate_data_length_melibu2(frame_size, func)
             self.check_slave(slave_adr)
             if inst == 0:
                 return self.match_frame_melibu2(frame, rt, func, inst, frame_size, self.inst_word)
