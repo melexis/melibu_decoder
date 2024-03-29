@@ -31,11 +31,7 @@ class Hla(HighLevelAnalyzer):
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
-        'header1': {
-            # 'format': 'frame: {{data.frame}}, slave_addr: {{data.slave}}, R/T: {{data.r}}, F: {{data.f}}, instr_ext: {{data.instr}}'
-            'format': 'frame: {{data.frame}}, info: {{data.frame_info}}'
-        },
-        'header2': {
+        'header': {
             'format': 'frame: {{data.frame}}, info: {{data.frame_info}}'
         },
         'data': {
@@ -54,13 +50,14 @@ class Hla(HighLevelAnalyzer):
         Initialize HLA.
         Settings can be accessed using the same name used above.
         '''
-        # run python mbdf parser and save protocol version
+        # erase " from begining and end if there are in string
         path = self.mbdf_filepath
         if (path[0] == '\"') | (path[0] == '\''):
             path = path[1:]
         if (path[-1] == '\"') | (path[-1] == '\''):
             path = path[:-1]
-        print(path)
+        
+        # run python mbdf parser and save protocol version
         path = Path(path)
         app = ParserApplication(path)
         app.run()
@@ -77,8 +74,7 @@ class Hla(HighLevelAnalyzer):
         if (self.protocol_version == 1.1) & (function_select == 1):
             self.data_length = (frame_size + 1) * 1
         
-    def get_info_from_ids_melibu1(self):
-        
+    def get_info_from_ids_melibu1(self):      
         # extract values from id fields
         slave_adr = (self.id1 & 0xfc) >> 2
         rt = (self.id1 & 0x02) >> 1
@@ -110,37 +106,64 @@ class Hla(HighLevelAnalyzer):
                 if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.sub_address == frame_size) & (curr_frame.ext_instruction == inst):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
-                    # return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str})
             else:
                 if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.sub_address == frame_size):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
-                    # return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str}) 
             if self.matched_frame == True & self.found_slave == True:
-                return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str})
+                return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str})
             
         # if we are here that means no matching fram has ben found and we will return unknown frame
-        return AnalyzerFrame('header1', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': self.info_str})
+        return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': self.info_str})
+    
+    def calculate_data_length_melibu2(self, pl_length, function_select):
+        length_dict_f0 = {0:0, 1:2, 2:4, 3:6, 4:8, 5:10, 6:18, 7:24}
+        length_dict_f1 = {0:6, 1:12, 2:24, 3:36, 4:48, 5:60, 6:84, 7:128}
         
+        if function_select == 0:
+            self.data_length = length_dict_f0[pl_length]
+        else:
+            self.data_length = length_dict_f1[pl_length]
+    
     def get_info_from_ids_melibu2(self):
         
         # extract values from id fields
         slave_adr = self.id1
         rt = (self.id2 & 0x01)
         func = (self.id2 & 0x02) >> 1
-        inst = (self.id2 & 0x03) >> 2
+        inst = (self.id2 & 0x04) >> 2
         pl_len = (self.id2 & 0x38) >> 3
         
-        self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, I = {i}, PL LENGTH = {pl}'.format(slave = hex(slave_adr), RT = rt, f = func, i = inst, pl = pl_len)
+        if inst == 0:
+            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, I = {i}, PL LENGTH = {pl}'.format(slave = hex(slave_adr), RT = rt, f = func, i = inst, pl = pl_len)
+        else:
+            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, I = {i}, PL LENGTH = {pl}, INSTRUCTION = {inst}'.format(slave = hex(slave_adr), RT = rt, f = func, i = inst, pl = pl_len, inst = self.inst_word)
         return slave_adr, rt, func, inst, pl_len
     
-    def calculate_data_length_melibu2(self, pl_length, function_select):
-        
-        self.data_length = pl_length + 1
-        if function_select == 0:
-            self.data_length = self.data_length * 2
-        else:
-            self.data_length = self.data_length * 6
+    def match_frame_melibu2(self, frame: AnalyzerFrame, rt_bit, f_bit, i_bit, frame_size, inst_word):
+        # iterate through all frames in mbdf file and match with frame with same values from id's
+        self.matched_frame = False
+        for frame_name in self.model.frames.keys():
+            curr_frame = self.model.frames.get(frame_name)
+            
+            f_type = 0
+            if curr_frame.function_type != "Command":
+                f_type = 1
+            
+            if(curr_frame.i_bit == 0):
+                if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.pl_length == frame_size) & (curr_frame.i_bit == i_bit):
+                    self.current_frame = curr_frame # set current frame for data decoding
+                    self.matched_frame = True
+            else:
+                if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.pl_length == frame_size) & (curr_frame.i_bit == i_bit) & (curr_frame.instruction_word == inst_word):
+                    self.current_frame = curr_frame # set current frame for data decoding
+                    self.matched_frame = True
+            if self.matched_frame == True & self.found_slave == True:
+                self.data_length = self.current_frame.size
+                return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str})
+            
+        # if we are here that means no matching fram has ben found and we will return unknown frame
+        return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': self.info_str})
             
     def check_slave(self, slave_address):
         self.found_slave = False
@@ -160,39 +183,36 @@ class Hla(HighLevelAnalyzer):
         self.data_array = [] # empty data array
         self.data_length = 0 # reset data length
         self.info_str = ''
+        self.inst_word = 0
         
         # current frame is frame found in mbdf file based on id1 and id2 value; current frame is used later when reading data in frame
         # initialize current frame with first frame; this is not important because current frame will have true value 
         self.current_frame = self.model.frames.get(list(self.model.frames.keys())[0])  
         if self.protocol_version < 2.0:
-            
             slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu1()
             self.calculate_data_length_melibu1(frame_size, func)
             self.check_slave(slave_adr)
-            return self.match_frame_melibu1(frame, rt, func, inst, frame_size)
-        
+            return self.match_frame_melibu1(frame, rt, func, inst, frame_size)       
         else:
-            # slave_adr = self.id1
-            # rt = id2 & 1
-            # func = id2 & 2
-            # return AnalyzerFrame('id1', frame.start_time, frame.end_time, {'slave address': slave_adr})
-            return []
+            slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu2()
+            self.calculate_data_length_melibu2(frame_size, func)
+            self.check_slave(slave_adr)
+            if inst == 0:
+                return self.match_frame_melibu2(frame, rt, func, inst, frame_size, self.inst_word)
+            else:
+                return []
         
     def decode_inst1(self, frame:AnalyzerFrame):
         self.inst1 = literal_eval((frame.data['data']))
     
     def decode_inst2(self, frame:AnalyzerFrame):
         self.inst2 = literal_eval((frame.data['data']))
-        
-        slave_adr = self.id1
-        rt = self.id2 & 1
-        func = (self.id2 & 2) >> 1
-        self.data_length = ((self.id2 & 0x38) >> 3) + 1
-        
-        if func == 0:
-            self.data_length = self.data_length * 2
-        else:
-            self.data_length = self.data_length * 6
+        self.inst_word = (self.inst2 << 8) | self.inst1
+        slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu2()
+        self.calculate_data_length_melibu2(frame_size, func)
+        self.check_slave(slave_adr)
+        return self.match_frame_melibu2(frame, rt, func, inst, frame_size, self.inst_word)
+            
         
     def decode_data(self, frame:AnalyzerFrame):
         self.data_array.append(frame)  # add data byte to array
@@ -205,9 +225,13 @@ class Hla(HighLevelAnalyzer):
             delta_time_float = delta_time.__float__()                                 # convert GraphTimeDelta to float [s]
             delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
             
-            signals = sorted(self.current_frame.signal_chunks_big_endian, key = lambda x: x.significance, reverse = False) 
+            if self.protocol_version < 2:
+                signals = self.current_frame.signal_chunks_big_endian
+            else:
+                signals = self.current_frame.signal_chunks_little_endian
+            signals_sorted = sorted(signals, key = lambda x: x.significance, reverse = False) 
             signals_dict = dict()
-            for sig in signals:
+            for sig in signals_sorted:
                 name = sig.signal.name
                 offset = sig.real_offset
                 size = sig.size
@@ -227,9 +251,9 @@ class Hla(HighLevelAnalyzer):
                 else:
                     signals_dict[name] = value
                     
-            signals = sorted(self.current_frame.signal_chunks_big_endian, key=lambda x: x.real_offset, reverse=False)
+            signals_sorted = sorted(signals, key=lambda x: x.real_offset, reverse=False)
             added_signals = []
-            for sig in signals:
+            for sig in signals_sorted:
                 if sig.signal.name not in added_signals:
                     added_signals.append(sig.signal.name)
                     physical_value = 'None'
@@ -272,6 +296,10 @@ class Hla(HighLevelAnalyzer):
             self.decode_id1(frame)
         elif frame.type == 'header_ID2':
             return self.decode_id2(frame)
+        elif frame.type == 'instruction_byte1':
+            return self.decode_inst1(frame)
+        elif frame.type == 'instruction_byte2':
+            return self.decode_inst2(frame)
         elif (frame.type == 'data') & (self.found_slave == True) & (self.matched_frame == True):
             return self.decode_data(frame)
         elif frame.type == 'data':

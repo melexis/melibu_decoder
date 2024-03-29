@@ -13,6 +13,8 @@
 
 #include <Windows.h>
 
+#include <regex>
+
 // set initial values for variables and add input interfaces
 MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     : mInputChannel( UNDEFINED_CHANNEL ),
@@ -85,6 +87,8 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     mMbdfFilepath = mMbdfFileInterface->GetText();
     mACK = mMELIBUAckEnabledInterface->GetValue();
     mLoadSettingsFromMbdf = mMELIBULoadFromMbdfInterface->GetValue();
+    mBitRate = mBitRateInterface->GetInteger();
+    mMELIBUVersion = mMELIBUVersionInterface->GetNumber();
 
     settingsFromMBDF = false; // reset
     node_ack.clear(); // empty (node,ack) map
@@ -152,7 +156,7 @@ std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path
     std::string python_exe_path = dllFolderPath;
     python_exe_path += "\\Melexis\\Python\\python.exe";
     std::string whole_input = python_exe_path + " " + script_path + " " + mMbdfFilepath + " " + other_args;
-    std::array < char, 128 > buffer;
+    std::array < char, 256 > buffer;
     std::string result;
     std::shared_ptr < FILE > pipe( _popen( whole_input.c_str(), "r" ), _pclose );
     if( !pipe ) {
@@ -163,10 +167,14 @@ std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path
             result += buffer.data();
         }
     }
+
     return result;
 }
 
 void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
+    //std::ofstream outfile;
+    //outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt", std::ios_base::app ); // append instead of overwrite
+    //outfile << output << "\n-------------\n";
     mMELIBUVersion = stod( output.substr( 0, output.find_first_of( "\n" ) ) );
     output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
     mBitRate = stod( output.substr( 0, output.find_first_of( "\n" ) ) );
@@ -187,12 +195,6 @@ void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
         node_ack.insert( std::pair < U8, bool > ( slaveAdr, ack ) );
     }
 
-    std::ofstream outfile;
-    outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt",
-                  std::ios_base::app );                                                                                          // append instead of overwrite
-    for( std::map < int, bool > ::iterator itr = node_ack.begin(); itr != node_ack.end(); ++itr ) {
-        outfile << itr->first << " " << itr->second << "\n";
-    }
 }
 
 void helperFcn() {};

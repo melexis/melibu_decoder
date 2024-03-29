@@ -28,13 +28,6 @@ void MELIBUAnalyzer::SetupResults() {
 }
 
 void MELIBUAnalyzer::WorkerThread() {
-    std::ofstream outfile;
-
-    outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt",
-                  std::ios_base::app );                                                                                          // append instead of overwrite
-    outfile << "Samples per bit " << SamplesPerBit() << "\n";
-    outfile << "Sample rate " << GetSampleRate() << "\n";
-
     mFrameState = MELIBUAnalyzerResults::NoFrame;
     bool showIBS = false; // show inter byte space
     U8 nDataBytes = 0;    // number of data in message
@@ -222,10 +215,49 @@ U8 MELIBUAnalyzer::NumberOfDataBytes( double MELIBUVersion, U8 idField1, U8 idFi
         functionSelect = idField2 & 0x02; // 0x02 = 0000 0010; extract value in second bit
         length = idField2 & 0x38;         // 0x38 = 0011 1000; extraxt bits on 3, 4 and 5 places
         length = length >> 3;             // right shift to get 3bit value
-        if( functionSelect == 0 )
+        if( functionSelect == 0 ) {
+            //switch( length )
+            //{
+            //case 0:
+            //    return 0;
+            //case 1:
+            //    return 2;
+            //case 2:
+            //    return 4;
+            //case 3:
+            //    return 6;
+            //case 4:
+            //    return 8;
+            //case 5:
+            //    return 10;
+            //case 6:
+            //    return 18;
+            //case 7:
+            //    return 24;
+            //}
             return ( length + 1 ) * 2;
-        else
+        } else {
+            //switch( length )
+            //{
+            //case 0:
+            //    return 6;
+            //case 1:
+            //    return 12;
+            //case 2:
+            //    return 24;
+            //case 3:
+            //    return 36;
+            //case 4:
+            //    return 48;
+            //case 5:
+            //    return 60;
+            //case 6:
+            //    return 84;
+            //case 7:
+            //    return 128;
+            //}
             return ( length + 1 ) * 6;
+        }
     } else {
         functionSelect = idField1 & 0x01; // 0x01 = 0000 0001
         if( functionSelect == 0 ) {
@@ -252,9 +284,7 @@ void MELIBUAnalyzer::FormatValue( std::ostringstream& ss, U64 value, U8 precisio
 }
 
 U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& framingError ) {
-    U32 min_break_field_low_bits = 11; // in MELIBU 2
-    if( mSettings->mMELIBUVersion < 2 )
-        min_break_field_low_bits = 13; // in MELIBU 1 minimum break field length is 13 low bits
+    U32 min_break_field_low_bits = 13; // both for MeLiBu 1 and 2
 
     U32 num_break_bits = 0;
     bool valid_frame = false;
@@ -339,8 +369,8 @@ U8 MELIBUAnalyzer::ByteFrame( S64& startingSample, S64& endingSample, bool& fram
         //check if we are really in a break frame
         //10 bits are read: start + 8 data btis + stop; check rest of the bits to see if it is break field
         //bool all_break_clear = !( mSerial->WouldAdvancingCauseTransition( SamplesPerBit() * ( mSettings->mMELIBUVersion == 2 ? 1 : 3 ) ) );
-        all_break_clear &=
-            !( mSerial->WouldAdvancingCauseTransition( SamplesPerBit() * ( mSettings->mMELIBUVersion == 2 ? 1 : 3 ) ) );
+        //all_break_clear &= !( mSerial->WouldAdvancingCauseTransition( SamplesPerBit() * ( mSettings->mMELIBUVersion == 2 ? 1 : 3 ) ) );
+        all_break_clear &= !( mSerial->WouldAdvancingCauseTransition( SamplesPerBit() * 3 ) );
 
         // add marker for wrong stop bit
         if( !all_break_clear ) {
@@ -445,14 +475,20 @@ bool MELIBUAnalyzer::SendAckByte( double MELIBUVersion, U8 idField1, U8 idField2
 
 void MELIBUAnalyzer::AddToCrc( bool addToCrc, U8 byteOrder, Frame byte, Frame prevByte ) {
     if( addToCrc ) { // add byte value to crc if needed
-        // for melibu 2 for each two bytes first add second and than first; when byte order is zero nothing will be added
-        if( mSettings->mMELIBUVersion == 2.0 && byteOrder == 1 ) {
-            mCRC.add( byte.mData1 );
-            mCRC.add( prevByte.mData1 );
-        }
-        // for melibu 1 add bytes to crc in order
-        if( mSettings->mMELIBUVersion < 2.0 )
-            mCRC.add( byte.mData1 );
+        // this was for older version of melibu 2
+
+        //// for melibu 2 for each two bytes first add second and than first; when byte order is zero nothing will be added
+        //if( mSettings->mMELIBUVersion == 2.0 && byteOrder == 1 )
+        //{
+        //    mCRC.add( byte.mData1 );
+        //    mCRC.add( prevByte.mData1 );
+        //}
+        //// for melibu 1 add bytes to crc in order
+        //if( mSettings->mMELIBUVersion < 2.0 )
+        //    mCRC.add( byte.mData1 );
+
+        // newer
+        mCRC.add( byte.mData1 );
     }
 }
 
@@ -564,12 +600,13 @@ U32 MELIBUAnalyzer::GetMinimumSampleRateHz() {
     return mSettings->mBitRate * 4;
 }
 
+// next two functions needs to return analyzer name string; this name will be shown in drop down menu when adding analyzers
 const char* MELIBUAnalyzer::GetAnalyzerName() const {
-    return "MeLiBu analyzer";
+    return "MeLiBu (low level)";
 }
 
 const char* GetAnalyzerName() {
-    return "MeLiBu analyzer";
+    return "MeLiBu (low level)";
 }
 
 Analyzer* CreateAnalyzer() {
