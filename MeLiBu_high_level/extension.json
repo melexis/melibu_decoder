@@ -1,11 +1,11 @@
 {
-  "name": "MeLiBu (high level)",
+  "name": "MeLiBu_high_level",
   "apiVersion": "1.0.0",
   "author": "shy coder",
   "version": "0.0.1",
   "description": "Decoding messages using MBDF file",
   "extensions": {
-    "MeLiBu (high level)": {
+    "MeLiBu_high_level": {
       "type": "HighLevelAnalyzer",
       "entryPoint": "HighLevelAnalyzer.Hla"
     }

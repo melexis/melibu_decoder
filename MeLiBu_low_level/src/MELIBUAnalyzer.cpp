@@ -602,11 +602,11 @@ U32 MELIBUAnalyzer::GetMinimumSampleRateHz() {
 
 // next two functions needs to return analyzer name string; this name will be shown in drop down menu when adding analyzers
 const char* MELIBUAnalyzer::GetAnalyzerName() const {
-    return "MeLiBu (low level)";
+    return "MeLiBu_low_level";
 }
 
 const char* GetAnalyzerName() {
-    return "MeLiBu (low level)";
+    return "MeLiBu_low_level";
 }
 
 Analyzer* CreateAnalyzer() {
