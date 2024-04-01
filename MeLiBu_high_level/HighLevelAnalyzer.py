@@ -42,6 +42,9 @@ class Hla(HighLevelAnalyzer):
         },
         'error': {
             'format': 'ERROR: {{data.error_type}}'
+        },
+        'crc': {
+            'format': 'crc value: {{data.raw_value}}'
         }
     }
 
@@ -85,10 +88,10 @@ class Hla(HighLevelAnalyzer):
         if func == 0:
             inst = (self.id2 & 0xe0) >> 5
             frame_size = (self.id2 & 0x1c) >> 2
-            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, INST = {i}, SIZE = {s}'.format(slave = hex(slave_adr), RT = rt, f = func, i = inst, s = frame_size)
+            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, INST = {i}, SIZE = {s}'.format(slave = '0x' + hex(slave_adr)[2:].upper(), RT = rt, f = func, i = inst, s = frame_size)
         else:
             frame_size = (self.id2 & 0xfc) >> 2
-            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, SIZE = {s}'.format(slave = hex(slave_adr), RT = rt, f = func, s = frame_size)
+            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, SIZE = {s}'.format(slave = '0x' + hex(slave_adr)[2:].upper(), RT = rt, f = func, s = frame_size)
             
         return slave_adr, rt, func, inst, frame_size
         
@@ -283,6 +286,18 @@ class Hla(HighLevelAnalyzer):
                 
         self.data_length = self.data_length - 1 # update data length
         return []
+    
+    def decode_crc1(self, frame:AnalyzerFrame):
+        self.crc_start = frame.start_time
+        self.crc = literal_eval((frame.data['data']))
+        return []
+        
+    def decode_crc2(self, frame:AnalyzerFrame):
+        if self.protocol_version < 2.0:
+            self.crc = (self.crc << 8) | literal_eval((frame.data['data']))
+        else:
+            self.crc = (literal_eval((frame.data['data'])) << 8) | self.crc
+        return AnalyzerFrame('crc', self.crc_start, frame.end_time, {'raw_value': '0x' + hex(self.crc)[2:].upper()})
         
 
     def decode(self, frame: AnalyzerFrame):
@@ -305,7 +320,11 @@ class Hla(HighLevelAnalyzer):
             return self.decode_data(frame)
         elif frame.type == 'data':
             return AnalyzerFrame('raw data', frame.start_time, frame.end_time, {'raw_value': frame.data['data']})
-        elif (frame.type == 'crc1') | (frame.type == 'crc2') | (frame.type == 'ack'):
+        elif frame.type == 'crc1':
+            return self.decode_crc1(frame)
+        elif frame.type == 'crc2':
+            return self.decode_crc2(frame)
+        elif frame.type == 'ack':
             # Return the data frame itself
             return AnalyzerFrame(frame.type, frame.start_time, frame.end_time)
         else:
