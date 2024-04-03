@@ -283,12 +283,11 @@ void MELIBUAnalyzer::FormatValue( std::ostringstream& ss, U64 value, U8 precisio
     ss << "0x" << std::setfill( '0' ) << std::setw( precision ) << std::uppercase << std::hex << value;
 }
 
-U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& framingError ) {
+U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& framingError, bool& toggling ) {
     U32 min_break_field_low_bits = 13; // both for MeLiBu 1 and 2
-
     U32 num_break_bits = 0;
     bool valid_frame = false;
-    StartingSampleInBreakField( min_break_field_low_bits, startingSample, num_break_bits, valid_frame );
+    StartingSampleInBreakField( min_break_field_low_bits, startingSample, num_break_bits, valid_frame, toggling );
 
     // sample (add marker) each byte of break field at the middle of bit
     for( U32 i = 0; i < num_break_bits; i++ ) {
@@ -374,7 +373,7 @@ U8 MELIBUAnalyzer::ByteFrame( S64& startingSample, S64& endingSample, bool& fram
 
         // add marker for wrong stop bit
         if( !all_break_clear ) {
-            mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorDot, mSettings->mInputChannel );
+            mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorSquare, mSettings->mInputChannel );
             framingError = true;
         } else {
             mSerial->AdvanceToNextEdge();
@@ -422,22 +421,15 @@ U8 MELIBUAnalyzer::ByteFrame( S64& startingSample, S64& endingSample, bool& fram
 void MELIBUAnalyzer::StartingSampleInBreakField( U32 minBreakFieldBits,
                                                  S64& startingSample,
                                                  U32& num_break_bits,
-                                                 bool& valid_frame ) {
-    bool toggling = false;  // bool indicating that we added unexpected_toggling row to UI table
+                                                 bool& valid_frame,
+                                                 bool& toggling ) {
+    toggling = false;
     for( ;; ) {
         mSerial->AdvanceToNextEdge();
         if( mSerial->GetBitState() == BIT_HIGH ) {
             // add marker at every rising edge when searching for brak field
             mResults->AddMarker( mSerial->GetSampleNumber(), AnalyzerResults::ErrorX, mSettings->mInputChannel );
-            if( !toggling ) { // if there is more toggling before break field add toggling row just once
-                FrameV2 frame_v2;
-                frame_v2.AddBoolean( "header_toggling", true );
-                mResults->AddFrameV2( frame_v2,
-                                      "unexpected_toggling",
-                                      mSerial->GetSampleNumber(),
-                                      mSerial->GetSampleOfNextEdge() );
-                toggling = true;
-            }
+            toggling = true;
             mSerial->AdvanceToNextEdge();
         }
         // do not advance, but only get the sample of next edge and calculate number of low bits
@@ -539,10 +531,14 @@ void MELIBUAnalyzer::ReadFrame( Frame& byteFrame, Frame& ibsFrame, bool& is_data
     is_data_really_break = false;
     ibsFrame.mStartingSampleInclusive = mSerial->GetSampleNumber(); // inter byte space is from current sample to starting sample of break or byte field
     // read break or byte field; byteFramingError and is_data_really_break are set in functions
+    byteFrame.mFlags = 0;
     if( ( mFrameState == MELIBUAnalyzerResults::NoFrame ) || ( mFrameState == MELIBUAnalyzerResults::headerBreak ) ) {
+        bool toggling = false;
         byteFrame.mData1 = GetBreakField( byteFrame.mStartingSampleInclusive,
                                           byteFrame.mEndingSampleInclusive,
-                                          byteFramingError );
+                                          byteFramingError,
+                                          toggling );
+        byteFrame.mFlags |= ( toggling ? MELIBUAnalyzerResults::headerToggling : 0 );
     } else {
         byteFrame.mData1 = ByteFrame( byteFrame.mStartingSampleInclusive,
                                       byteFrame.mEndingSampleInclusive,
@@ -551,7 +547,7 @@ void MELIBUAnalyzer::ReadFrame( Frame& byteFrame, Frame& ibsFrame, bool& is_data
     }
     ibsFrame.mEndingSampleInclusive = byteFrame.mStartingSampleInclusive;
     byteFrame.mData2 = 0;
-    byteFrame.mFlags = byteFramingError ? MELIBUAnalyzerResults::byteFramingError : 0;
+    byteFrame.mFlags |= ( byteFramingError ? MELIBUAnalyzerResults::byteFramingError : 0 );
     byteFrame.mType = mFrameState;
 }
 

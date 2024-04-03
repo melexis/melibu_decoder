@@ -37,6 +37,8 @@ namespace
             strings.push_back( "crc_mismatch" );
         if( flags & MELIBUAnalyzerResults::receptionFailed )
             strings.push_back( "reception_failed" );
+        if( flags & MELIBUAnalyzerResults::headerToggling )
+            strings.push_back( "header_toggling" );
 
         return strings;
     }
@@ -68,10 +70,13 @@ class ANALYZER_EXPORT MELIBUAnalyzer: public Analyzer2
     U8 NumberOfDataBytes( double MELIBUVersion, U8 idField1, U8 idField2 );
     void FormatValue( std::ostringstream& ss, U64 value, U8 precision );
 
-    U8 GetBreakField( S64& startingSample, S64& endingSample, bool& framingError );
+    U8 GetBreakField( S64& startingSample, S64& endingSample, bool& framingError, bool& toggling );
     U8 ByteFrame( S64& startingSample, S64& endingSample, bool& framingError, bool& is_break_field );
-    void StartingSampleInBreakField( U32 minBreakFieldBits, S64& startingSample, U32& num_break_bits,
-                                     bool& valid_frame );
+    void StartingSampleInBreakField( U32 minBreakFieldBits,
+                                     S64& startingSample,
+                                     U32& num_break_bits,
+                                     bool& valid_frame,
+                                     bool& toggling );
     bool SendAckByte( double MELIBUVersion, U8 idField1, U8 idField2 );
     void AddToCrc( bool addToCrc, U8 byteOrder, Frame byte, Frame prevByte );
     void AddFrameToTable( Frame f, std::ostringstream& ss );
