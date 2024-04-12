@@ -103,8 +103,10 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     struct stat sb;
     if( ( stat( mMbdfFilepath, &sb ) == 0 ) && mLoadSettingsFromMbdf ) { // run python script and save values to vars
         std::string python_output = RunPythonMbdfParser( python_script_path, "" );
-        parsePythonOutput( python_output ); // parse python output and save values to class variables
-        settingsFromMBDF = true;
+        if( python_output != "" ) {
+            parsePythonOutput( python_output ); // parse python output and save values to class variables
+            settingsFromMBDF = true;
+        }
     } else {
         mBitRate = mBitRateInterface->GetInteger();
         mMELIBUVersion = mMELIBUVersionInterface->GetNumber();

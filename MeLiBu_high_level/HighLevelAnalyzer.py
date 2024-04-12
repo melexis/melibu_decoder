@@ -28,6 +28,8 @@ class Hla(HighLevelAnalyzer):
     
     # List of settings that a user can set for this High Level Analyzer.
     mbdf_filepath = StringSetting()
+    hints = ChoicesSetting(choices = ['First configure LLA to be visible in \'Input Analyzer\'',
+                                      'Copy path to mbdf and paste it to \'Mbdf Filepath\''])
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -69,6 +71,7 @@ class Hla(HighLevelAnalyzer):
         
         self.found_slave = False
         self.matched_frame = False
+        
         
     def calculate_data_length_melibu1(self, frame_size, function_select):
         
@@ -199,7 +202,6 @@ class Hla(HighLevelAnalyzer):
             return self.match_frame_melibu1(frame, rt, func, inst, frame_size)       
         else:
             slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu2()
-            # self.calculate_data_length_melibu2(frame_size, func)
             self.check_slave(slave_adr)
             if inst == 0:
                 return self.match_frame_melibu2(frame, rt, func, inst, frame_size, self.inst_word)
@@ -213,7 +215,7 @@ class Hla(HighLevelAnalyzer):
         self.inst2 = literal_eval((frame.data['data']))
         self.inst_word = (self.inst2 << 8) | self.inst1
         slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu2()
-        self.calculate_data_length_melibu2(frame_size, func)
+        # self.calculate_data_length_melibu2(frame_size, func)
         self.check_slave(slave_adr)
         return self.match_frame_melibu2(frame, rt, func, inst, frame_size, self.inst_word)
             
@@ -236,20 +238,34 @@ class Hla(HighLevelAnalyzer):
             signals_sorted = sorted(signals, key = lambda x: x.significance, reverse = False) 
             signals_dict = dict()
             for sig in signals_sorted:
+                # get name, offset and size of signal chunks
                 name = sig.signal.name
                 offset = sig.real_offset
                 size = sig.size
                 
                 value = 0
                 mask = 0
+                
+                # connect all bytes values where chunk is located
                 for i in range(offset//8, (offset + size - 1)//8 + 1):
-                    value = (value << 8) | literal_eval((self.data_array[i].data['data']))
+                    
+                    curr_val = literal_eval((self.data_array[i].data['data']))
+                    
+                    if self.protocol_version < 2:
+                        value = (value << 8) | curr_val
+                    else:
+                        value = (curr_val << 8 * (i - offset//8)) | value
+                        
                     mask = (mask << 8) | 255
+                    
+                # extract only part of number -> from local offset with local size
                 number_size = 8 * ((offset + size - 1)//8 - offset//8 + 1)
                 mask = (mask >> (offset % 8)) & (mask << (number_size - size - offset % 8))
                 value = value & mask
                 value = value >> (number_size - size - offset % 8)
                 
+                # connect chunk value with previous
+                # maybe not working properly for melibu 2, but for melibu 2 there won't be more chunks for one signal
                 if name in signals_dict:
                     signals_dict[name] = (signals_dict[name] << size) | value
                 else:
@@ -306,8 +322,8 @@ class Hla(HighLevelAnalyzer):
 
         The type and data values in `frame` will depend on the input analyzer.
         '''
-        if frame.type == 'header_break':
-            return AnalyzerFrame('header break', frame.start_time, frame.end_time)
+        if frame.type == 'breakfield':
+            return AnalyzerFrame('breakfield', frame.start_time, frame.end_time)
         elif frame.type == 'header_ID1':
             self.decode_id1(frame)
         elif frame.type == 'header_ID2':

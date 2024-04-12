@@ -56,7 +56,7 @@ void MELIBUAnalyzerResults::GenerateBubbleText( U64 frame_index, Channel& channe
             case headerBreak:
                 str[ 0 ] += "BRK";
                 str[ 1 ] += "Break";
-                str[ 2 ] += "Header Break";
+                str[ 2 ] += "Breakfield";
                 break;
             case headerID1:
                 AnalyzerHelpers::GetNumberString( frame.mData1 & 0xFF, display_base, 8, number_str, 128 );

@@ -216,47 +216,45 @@ U8 MELIBUAnalyzer::NumberOfDataBytes( double MELIBUVersion, U8 idField1, U8 idFi
         length = idField2 & 0x38;         // 0x38 = 0011 1000; extraxt bits on 3, 4 and 5 places
         length = length >> 3;             // right shift to get 3bit value
         if( functionSelect == 0 ) {
-            //switch( length )
-            //{
-            //case 0:
-            //    return 0;
-            //case 1:
-            //    return 2;
-            //case 2:
-            //    return 4;
-            //case 3:
-            //    return 6;
-            //case 4:
-            //    return 8;
-            //case 5:
-            //    return 10;
-            //case 6:
-            //    return 18;
-            //case 7:
-            //    return 24;
-            //}
-            return ( length + 1 ) * 2;
+            switch( length ) {
+                case 0:
+                    return 0;
+                case 1:
+                    return 2;
+                case 2:
+                    return 4;
+                case 3:
+                    return 6;
+                case 4:
+                    return 8;
+                case 5:
+                    return 10;
+                case 6:
+                    return 18;
+                case 7:
+                    return 24;
+            }
+            //return ( length + 1 ) * 2;
         } else {
-            //switch( length )
-            //{
-            //case 0:
-            //    return 6;
-            //case 1:
-            //    return 12;
-            //case 2:
-            //    return 24;
-            //case 3:
-            //    return 36;
-            //case 4:
-            //    return 48;
-            //case 5:
-            //    return 60;
-            //case 6:
-            //    return 84;
-            //case 7:
-            //    return 128;
-            //}
-            return ( length + 1 ) * 6;
+            switch( length ) {
+                case 0:
+                    return 6;
+                case 1:
+                    return 12;
+                case 2:
+                    return 24;
+                case 3:
+                    return 36;
+                case 4:
+                    return 48;
+                case 5:
+                    return 60;
+                case 6:
+                    return 84;
+                case 7:
+                    return 128;
+            }
+            //return ( length + 1 ) * 6;
         }
     } else {
         functionSelect = idField1 & 0x01; // 0x01 = 0000 0001
@@ -284,7 +282,10 @@ void MELIBUAnalyzer::FormatValue( std::ostringstream& ss, U64 value, U8 precisio
 }
 
 U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& framingError, bool& toggling ) {
-    U32 min_break_field_low_bits = 13; // both for MeLiBu 1 and 2
+    U32 min_break_field_low_bits = 13; // for MeLiBu 1
+    if( mSettings->mMELIBUVersion >= 2.0 )
+        min_break_field_low_bits = 11; // for MeLiBu 2
+
     U32 num_break_bits = 0;
     bool valid_frame = false;
     StartingSampleInBreakField( min_break_field_low_bits, startingSample, num_break_bits, valid_frame, toggling );

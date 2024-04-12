@@ -11,7 +11,7 @@ namespace
 {
     std::map < MELIBUAnalyzerResults::tMELIBUFrameState, std::string > FrameTypeStringLookup = {
         { MELIBUAnalyzerResults::NoFrame, "no_frame" },
-        { MELIBUAnalyzerResults::headerBreak, "header_break" },
+        { MELIBUAnalyzerResults::headerBreak, "breakfield" },
         { MELIBUAnalyzerResults::headerID1, "header_ID1" },
         { MELIBUAnalyzerResults::headerID2, "header_ID2" },
         { MELIBUAnalyzerResults::instruction1, "instruction_byte1" },
