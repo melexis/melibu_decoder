@@ -2,7 +2,7 @@
 # For more information and documentation, please go to https://support.saleae.com/extensions/high-level-analyzer-extensions
 
 from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame, StringSetting, NumberSetting, ChoicesSetting
-from saleae.data import GraphTimeDelta
+from saleae.data import GraphTimeDelta, GraphTime
 
 import sys
 import os
@@ -22,6 +22,7 @@ from pymbdfparser.model.script_frame import ScriptFrameBase
 from pymbdfparser.model.signal_encoding_type import PhysicalEncoding
 
 from ast import literal_eval
+from datetime import datetime
 
 # High level analyzers must subclass the HighLevelAnalyzer class.
 class Hla(HighLevelAnalyzer):
@@ -69,17 +70,24 @@ class Hla(HighLevelAnalyzer):
         self.model = app.model
         self.protocol_version = self.model.bus_protocol_version
         
+        self.info_str = ''
+        self.id1 = 0
+        self.id2 = 0
+        self.inst1 = 0
+        self.inst2 = 0
+        self.inst_word = 0
+        self.data_length = 0
+        self.data_array = []
+        
+        self.crc = 0
+        self.crc_start = GraphTime(datetime.now())
+        self.id1_start = GraphTime(datetime.now())
+        
+        self.current_frame = None
+        
         self.found_slave = False
         self.matched_frame = False
-        
-        
-    def calculate_data_length_melibu1(self, frame_size, function_select):
-        
-        self.data_length = bin(frame_size).count("1") * 6
-        # for extended mode and function select value 1 calculate data length differently
-        if (self.protocol_version == 1.1) & (function_select == 1):
-            self.data_length = (frame_size + 1) * 1
-        
+                
     def get_info_from_ids_melibu1(self):      
         # extract values from id fields
         slave_adr = (self.id1 & 0xfc) >> 2
@@ -123,14 +131,6 @@ class Hla(HighLevelAnalyzer):
         # if we are here that means no matching fram has ben found and we will return unknown frame
         return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': self.info_str})
     
-    def calculate_data_length_melibu2(self, pl_length, function_select):
-        length_dict_f0 = {0:0, 1:2, 2:4, 3:6, 4:8, 5:10, 6:18, 7:24}
-        length_dict_f1 = {0:6, 1:12, 2:24, 3:36, 4:48, 5:60, 6:84, 7:128}
-        
-        if function_select == 0:
-            self.data_length = length_dict_f0[pl_length]
-        else:
-            self.data_length = length_dict_f1[pl_length]
     
     def get_info_from_ids_melibu2(self):
         
@@ -195,12 +195,11 @@ class Hla(HighLevelAnalyzer):
         # current frame is frame found in mbdf file based on id1 and id2 value; current frame is used later when reading data in frame
         # initialize current frame with first frame; this is not important because current frame will have true value 
         self.current_frame = self.model.frames.get(list(self.model.frames.keys())[0])  
-        if self.protocol_version < 2.0:
+        if self.protocol_version < 2.0: # for MeLiBu 1 there is no instruction word; just connect id1 and id2
             slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu1()
-            # self.calculate_data_length_melibu1(frame_size, func)
             self.check_slave(slave_adr)
             return self.match_frame_melibu1(frame, rt, func, inst, frame_size)       
-        else:
+        else: # for MeLiBu 2connect id1 and id2 if there is no inst word, otherwise return nothing
             slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu2()
             self.check_slave(slave_adr)
             if inst == 0:
@@ -213,12 +212,16 @@ class Hla(HighLevelAnalyzer):
     
     def decode_inst2(self, frame:AnalyzerFrame):
         self.inst2 = literal_eval((frame.data['data']))
-        self.inst_word = (self.inst2 << 8) | self.inst1
+        self.inst_word = (self.inst2 << 8) | self.inst1 # create instruction word from inst1 & inst2 byte fields
         slave_adr, rt, func, inst, frame_size = self.get_info_from_ids_melibu2()
-        # self.calculate_data_length_melibu2(frame_size, func)
         self.check_slave(slave_adr)
         return self.match_frame_melibu2(frame, rt, func, inst, frame_size, self.inst_word)
-            
+       
+    def get_signal_chunks(self):
+        if self.protocol_version < 2:
+            return self.current_frame.signal_chunks_big_endian
+        else:
+            return self.current_frame.signal_chunks_little_endian
         
     def decode_data(self, frame:AnalyzerFrame):
         self.data_array.append(frame)  # add data byte to array
@@ -231,12 +234,10 @@ class Hla(HighLevelAnalyzer):
             delta_time_float = delta_time.__float__()                                 # convert GraphTimeDelta to float [s]
             delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
             
-            if self.protocol_version < 2:
-                signals = self.current_frame.signal_chunks_big_endian
-            else:
-                signals = self.current_frame.signal_chunks_little_endian
+            signals = self.get_signal_chunks()
             signals_sorted = sorted(signals, key = lambda x: x.significance, reverse = False) 
             signals_dict = dict()
+            
             for sig in signals_sorted:
                 # get name, offset and size of signal chunks
                 name = sig.signal.name
@@ -252,20 +253,21 @@ class Hla(HighLevelAnalyzer):
                     curr_val = literal_eval((self.data_array[i].data['data']))
                     
                     if self.protocol_version < 2:
-                        value = (value << 8) | curr_val
+                        value = (value << 8) | curr_val # MSB byte first
                     else:
-                        value = (curr_val << 8 * (i - offset//8)) | value
+                        value = (curr_val << 8 * (i - offset//8)) | value # LSB byte first
                         
-                    mask = (mask << 8) | 255
-                    
+                    mask = (mask << 8) | 255 # mask will be all ones with length 8*(number of bytes containing value)
+                     
                 # extract only part of number -> from local offset with local size
                 number_size = 8 * ((offset + size - 1)//8 - offset//8 + 1)
                 mask = (mask >> (offset % 8)) & (mask << (number_size - size - offset % 8))
-                value = value & mask
-                value = value >> (number_size - size - offset % 8)
+                value = value & mask # extract important bits
+                value = value >> (number_size - size - offset % 8) # shift value to start from lsb bit
                 
                 # connect chunk value with previous
                 # maybe not working properly for melibu 2, but for melibu 2 there won't be more chunks for one signal
+                # good for both melibu 1 & 2 because chunks are sorted by significance
                 if name in signals_dict:
                     signals_dict[name] = (signals_dict[name] << size) | value
                 else:
