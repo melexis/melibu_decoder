@@ -29,9 +29,9 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     bool mACK;
     bool mLoadSettingsFromMbdf;
 
-    std::map < int, bool > node_ack;
+    std::map < int, bool > node_ack; // when reading config from mbdf each node can have different bool for receiving ack byte
     const char* dllFolderPath;
-    bool settingsFromMBDF;
+    bool settingsFromMBDF;        // varieable indicating if config are loaded from mbdf; used in MELIBUAnalyzer
 
  protected:
     std::auto_ptr < AnalyzerSettingInterfaceChannel > mInputChannelInterface;

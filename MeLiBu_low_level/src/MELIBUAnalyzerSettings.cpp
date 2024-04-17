@@ -15,6 +15,8 @@
 
 #include <regex>
 
+#include <stdexcept>
+
 // set initial values for variables and add input interfaces
 MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     : mInputChannel( UNDEFINED_CHANNEL ),
@@ -34,6 +36,12 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mMbdfFileInterface->SetTitleAndTooltip( "MBDF filepath", "MBDF filepath" );
     mMbdfFileInterface->SetTextType( AnalyzerSettingInterfaceText::FilePath );
     mMbdfFileInterface->SetText( mMbdfFilepath );
+
+    mMELIBULoadFromMbdfInterface.reset( new AnalyzerSettingInterfaceBool() );
+    mMELIBULoadFromMbdfInterface->SetTitleAndTooltip( "Settings from MBDF",
+                                                      "Select if you want to load settings from entered MBDF file." );
+    mMELIBULoadFromMbdfInterface->SetCheckBoxText( "Load settings from MBDF" );
+    mMELIBULoadFromMbdfInterface->SetValue( mLoadSettingsFromMbdf );
 
     mBitRateInterface.reset( new AnalyzerSettingInterfaceInteger() );
     mBitRateInterface->SetTitleAndTooltip( "Bit Rate (Bits/S)",  "Specify the bit rate in bits per second." );
@@ -55,18 +63,12 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mMELIBUAckEnabledInterface->SetCheckBoxText( "ACK" );
     mMELIBUAckEnabledInterface->SetValue( mACK );
 
-    mMELIBULoadFromMbdfInterface.reset( new AnalyzerSettingInterfaceBool() );
-    mMELIBULoadFromMbdfInterface->SetTitleAndTooltip( "Settings from MBDF",
-                                                      "Select if you want to load settings from entered MBDF file." );
-    mMELIBULoadFromMbdfInterface->SetCheckBoxText( "Load settings from MBDF" );
-    mMELIBULoadFromMbdfInterface->SetValue( mLoadSettingsFromMbdf );
-
     AddInterface( mInputChannelInterface.get() );
     AddInterface( mMbdfFileInterface.get() );
+    AddInterface( mMELIBULoadFromMbdfInterface.get() );
     AddInterface( mBitRateInterface.get() );
     AddInterface( mMELIBUVersionInterface.get() );
     AddInterface( mMELIBUAckEnabledInterface.get() );
-    AddInterface( mMELIBULoadFromMbdfInterface.get() );
 
     // no effect when calling these 4 functions
     // custom export options are not supported in V2
@@ -83,81 +85,80 @@ MELIBUAnalyzerSettings::~MELIBUAnalyzerSettings() {}
 
 bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     // set vars from UI
-    mInputChannel = mInputChannelInterface->GetChannel();
-    mMbdfFilepath = mMbdfFileInterface->GetText();
-    mACK = mMELIBUAckEnabledInterface->GetValue();
-    mLoadSettingsFromMbdf = mMELIBULoadFromMbdfInterface->GetValue();
-    mBitRate = mBitRateInterface->GetInteger();
-    mMELIBUVersion = mMELIBUVersionInterface->GetNumber();
+    this->mInputChannel = this->mInputChannelInterface->GetChannel();
+    this->mMbdfFilepath = this->mMbdfFileInterface->GetText();
+    this->mACK = this->mMELIBUAckEnabledInterface->GetValue();
+    this->mLoadSettingsFromMbdf = this->mMELIBULoadFromMbdfInterface->GetValue();
+    this->mBitRate = this->mBitRateInterface->GetInteger();
+    this->mMELIBUVersion = this->mMELIBUVersionInterface->GetNumber();
 
-    settingsFromMBDF = false; // reset
-    node_ack.clear(); // empty (node,ack) map
+    this->settingsFromMBDF = false; // reset
+    this->node_ack.clear();         // empty (node,ack) map
 
     // get dll path and create path to python script
     std::string dll_path = getDLLPath();
     std::size_t found = dll_path.find_last_of( "/\\" );
-    dllFolderPath = dll_path.substr( 0, found ).c_str();
+    this->dllFolderPath = dll_path.substr( 0, found ).c_str();
     std::string python_script_path = dll_path.substr( 0, found ) + "\\read_mbdf.py";
 
     // check if mbdf file path exists
     struct stat sb;
-    if( ( stat( mMbdfFilepath, &sb ) == 0 ) && mLoadSettingsFromMbdf ) { // run python script and save values to vars
+    if( ( stat( this->mMbdfFilepath, &sb ) == 0 ) && this->mLoadSettingsFromMbdf ) { // run python script and save values to vars
         std::string python_output = RunPythonMbdfParser( python_script_path, "" );
-        if( python_output != "" ) {
+        if( python_output == "" )
+            throw std::invalid_argument( "a or b negative" );
+        if( python_output != "" ) { // error in python script
             parsePythonOutput( python_output ); // parse python output and save values to class variables
-            settingsFromMBDF = true;
+            this->settingsFromMBDF = true;
         }
-    } else {
-        mBitRate = mBitRateInterface->GetInteger();
-        mMELIBUVersion = mMELIBUVersionInterface->GetNumber();
     }
     ClearChannels();
-    AddChannel( mInputChannel, "MeLiBu analyzer", true );
+    AddChannel( this->mInputChannel, "MeLiBu analyzer", true );
 
     return true;
 }
 
 void MELIBUAnalyzerSettings::UpdateInterfacesFromSettings() {
-    mInputChannelInterface->SetChannel( mInputChannel );
-    mMbdfFileInterface->SetText( mMbdfFilepath );
-    mBitRateInterface->SetInteger( mBitRate );
-    mMELIBUVersionInterface->SetNumber( mMELIBUVersion );
-    mMELIBUAckEnabledInterface->SetValue( mACK );
-    mMELIBULoadFromMbdfInterface->SetValue( mLoadSettingsFromMbdf );
+    this->mInputChannelInterface->SetChannel( this->mInputChannel );
+    this->mMbdfFileInterface->SetText( this->mMbdfFilepath );
+    this->mBitRateInterface->SetInteger( this->mBitRate );
+    this->mMELIBUVersionInterface->SetNumber( this->mMELIBUVersion );
+    this->mMELIBUAckEnabledInterface->SetValue( this->mACK );
+    this->mMELIBULoadFromMbdfInterface->SetValue( this->mLoadSettingsFromMbdf );
 }
 
 void MELIBUAnalyzerSettings::LoadSettings( const char* settings ) {
     SimpleArchive text_archive;
     text_archive.SetString( settings );
 
-    text_archive >> mInputChannel;
-    text_archive >> mBitRate;
-    text_archive >> mMELIBUVersion;
-    text_archive >> mACK;
-    text_archive >> mLoadSettingsFromMbdf;
-    mMbdfFilepath = text_archive.GetString();
+    text_archive >> this->mInputChannel;
+    text_archive >> this->mBitRate;
+    text_archive >> this->mMELIBUVersion;
+    text_archive >> this->mACK;
+    text_archive >> this->mLoadSettingsFromMbdf;
+    this->mMbdfFilepath = text_archive.GetString();
 
     ClearChannels();
-    AddChannel( mInputChannel, "MeLiBu analyzer", true );
+    AddChannel( this->mInputChannel, "MeLiBu analyzer", true );
 }
 
 const char* MELIBUAnalyzerSettings::SaveSettings() {
     SimpleArchive text_archive;
     text_archive.SetString( "" );
-    text_archive << mInputChannel;
-    text_archive << mBitRate;
-    text_archive << mMELIBUVersion;
-    text_archive << mACK;
-    text_archive << mLoadSettingsFromMbdf;
-    text_archive << mMbdfFilepath;
+    text_archive << this->mInputChannel;
+    text_archive << this->mBitRate;
+    text_archive << this->mMELIBUVersion;
+    text_archive << this->mACK;
+    text_archive << this->mLoadSettingsFromMbdf;
+    text_archive << this->mMbdfFilepath;
 
     return SetReturnString( text_archive.GetString() );
 }
 
 std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path, std::string other_args ) {
-    std::string python_exe_path = dllFolderPath;
+    std::string python_exe_path = this->dllFolderPath;
     python_exe_path += "\\Melexis\\Python\\python.exe";
-    std::string whole_input = python_exe_path + " " + script_path + " " + mMbdfFilepath + " " + other_args;
+    std::string whole_input = python_exe_path + " " + script_path + " " + this->mMbdfFilepath + " " + other_args;
     std::array < char, 256 > buffer;
     std::string result;
     std::shared_ptr < FILE > pipe( _popen( whole_input.c_str(), "r" ), _pclose );
@@ -177,10 +178,11 @@ void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
     //std::ofstream outfile;
     //outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt", std::ios_base::app ); // append instead of overwrite
     //outfile << output << "\n-------------\n";
-    mMELIBUVersion = stod( output.substr( 0, output.find_first_of( "\n" ) ) );
-    output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
-    mBitRate = stod( output.substr( 0, output.find_first_of( "\n" ) ) );
-    output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
+    this->mMELIBUVersion = stod( output.substr( 0, output.find_first_of( "\n" ) ) );   // read first line
+    output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 ); // delete first line
+    this->mBitRate = stod( output.substr( 0, output.find_first_of( "\n" ) ) );         // read first line
+    output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 ); // delete first line
+    // read first line and delete it while there are no lines to read
     while( output != "" ) {
         U8 slaveAdr = stoi( output.substr( 0, output.find_first_of( "\n" ) ) );
         output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 );
@@ -194,12 +196,12 @@ void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
         }
 
         bool ack = s == "True" ? true : false;
-        node_ack.insert( std::pair < U8, bool > ( slaveAdr, ack ) );
+        this->node_ack.insert( std::pair < U8, bool > ( slaveAdr, ack ) ); // add to map
     }
 
 }
 
-void helperFcn() {};
+void helperFcn() {}; // used for getDLLPath()
 
 std::string MELIBUAnalyzerSettings::getDLLPath() {
     char path[ MAX_PATH ];

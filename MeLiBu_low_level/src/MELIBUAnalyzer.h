@@ -67,8 +67,9 @@ class ANALYZER_EXPORT MELIBUAnalyzer: public Analyzer2
     double HalfSamplesPerBit();
     void AdvanceHalfBit();
     void Advance( U16 nBits );
-    U8 NumberOfDataBytes( double MELIBUVersion, U8 idField1, U8 idField2 );
-    void FormatValue( std::ostringstream& ss, U64 value, U8 precision );
+
+    U8 NumberOfDataBytes( U8 idField1, U8 idField2 ); // calucalte number of expected data bytes after header
+    void FormatValue( std::ostringstream& ss, U64 value, U8 precision ); // format value with hex notation with given precision
 
     U8 GetBreakField( S64& startingSample, S64& endingSample, bool& framingError, bool& toggling );
     U8 ByteFrame( S64& startingSample, S64& endingSample, bool& framingError, bool& is_break_field );
@@ -77,12 +78,12 @@ class ANALYZER_EXPORT MELIBUAnalyzer: public Analyzer2
                                      U32& num_break_bits,
                                      bool& valid_frame,
                                      bool& toggling );
-    bool SendAckByte( double MELIBUVersion, U8 idField1, U8 idField2 );
-    void AddToCrc( bool addToCrc, U8 byteOrder, Frame byte, Frame prevByte );
+    bool SendAckByte( U8 idField1, U8 idField2 );
+    void AddToCrc( bool addToCrc, Frame byte );
     void AddFrameToTable( Frame f, std::ostringstream& ss );
     void ReadFrame( Frame& byteFrame, Frame& ibsFrame, bool& is_data_really_break, bool& byteFramingError );
     void CrcFrameValue( U16& crc, U64 data, U8 frameOrder );
-    void AddMissingByteFrame( bool& showIBS, Frame& ibsFrame );
+    void AddMissingByteFrame( Frame& ibsFrame );
 
  protected: //vars
     std::auto_ptr < MELIBUAnalyzerSettings > mSettings;
