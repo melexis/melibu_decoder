@@ -1,7 +1,7 @@
 {
   "name": "MeLiBu_high_level",
   "apiVersion": "1.0.0",
-  "author": "shy coder",
+  "author": "NOFFZ-Forsteh Technologies d.o.o.",
   "version": "0.0.1",
   "description": "Decoding messages using MBDF file",
   "extensions": {

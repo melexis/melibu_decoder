@@ -29,6 +29,8 @@ void MELIBUAnalyzerResults::GenerateBubbleText( U64 frame_index, Channel& channe
         fault_str += "!BREAK";
     if( frame.mFlags & crcMismatch )
         fault_str += "!CRC";
+    if( frame.mFlags & receptionFailed )
+        fault_str += "!ACK";
     if( fault_str.length() ) {
         fault_str += "!";
         AddResultString( fault_str.c_str() );
@@ -150,8 +152,8 @@ void MELIBUAnalyzerResults::GenerateBubbleText( U64 frame_index, Channel& channe
 void MELIBUAnalyzerResults::GenerateExportFile( const char* file, DisplayBase display_base, U32 export_type_user_id ) {
     std::ofstream file_stream( file, std::ios::out );
 
-    U64 trigger_sample = mAnalyzer->GetTriggerSample();
-    U32 sample_rate = mAnalyzer->GetSampleRate();
+    U64 trigger_sample = this->mAnalyzer->GetTriggerSample();
+    U32 sample_rate = this->mAnalyzer->GetSampleRate();
 
     file_stream << "Type,Time [s],Value,Error" << std::endl;
 
@@ -194,15 +196,18 @@ void MELIBUAnalyzerResults::GenerateFrameTabularText( U64 frame_index, DisplayBa
      * char number_str[128];
      * AnalyzerHelpers::GetNumberString( frame.mData1, display_base, 8, number_str, 128 );
      * AddTabularText( number_str );*/
-    if( writeToTerminal == false ) {
+    ClearTabularText();
+    if( this->writeToTerminal == false ) {
         // write loaded melibu version and bit rate
         ClearTabularText();
         std::ostringstream s;
-        s << mSettings->mMELIBUVersion;
+        s << this->mSettings->mMELIBUVersion;
         std::string version = s.str();
+        AddTabularText( "Configuration loaded from ", this->mSettings->settingsFromMBDF ? "MBDF" : "UI",
+                        this->mSettings->pythonScriptError ? ", ERROR in python script when trying to read MBDF" : "" );
         AddTabularText( "MeLiBu version: ", version.c_str() );
         std::ostringstream s1;
-        s1 << mSettings->mBitRate;
+        s1 << this->mSettings->mBitRate;
         std::string bitrate = s1.str();
         AddTabularText( "Bit rate: ", bitrate.c_str(), "\n" );
         writeToTerminal = true;

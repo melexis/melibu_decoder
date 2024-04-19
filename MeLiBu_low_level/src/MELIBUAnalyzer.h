@@ -38,7 +38,7 @@ namespace
         if( flags & MELIBUAnalyzerResults::receptionFailed )
             strings.push_back( "reception_failed" );
         if( flags & MELIBUAnalyzerResults::headerToggling )
-            strings.push_back( "header_toggling" );
+            strings.push_back( "unexpected_data" );
 
         return strings;
     }

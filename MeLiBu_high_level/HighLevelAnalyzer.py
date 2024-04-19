@@ -29,8 +29,6 @@ class Hla(HighLevelAnalyzer):
     
     # List of settings that a user can set for this High Level Analyzer.
     mbdf_filepath = StringSetting()
-    hints = ChoicesSetting(choices = ['First configure LLA to be visible in \'Input Analyzer\'',
-                                      'Copy path to mbdf and paste it to \'Mbdf Filepath\''])
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {

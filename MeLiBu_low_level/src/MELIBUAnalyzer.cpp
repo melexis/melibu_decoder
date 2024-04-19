@@ -46,6 +46,7 @@ void MELIBUAnalyzer::WorkerThread() {
     bool ack = this->mSettings->mACK; // read ack byte? read when ack is enabled and when message is from master to slave (R/T bit)
     bool add_to_crc { false };   // add byte value to calculated crc? all types of bytes are added to crc except headerBreak, responseCRC1, responseCRC2 and responseACK
     std::ostringstream ss;      // used for formating byte values to string
+    U8 ack_value = this->mSettings->mMELIBUVersion == 2.0 ? this->mSettings->mACKValue : 0x7E;
 
     ibsFrame.mData1 = 0;
     ibsFrame.mData2 = 0;
@@ -164,7 +165,7 @@ void MELIBUAnalyzer::WorkerThread() {
             case MELIBUAnalyzerResults::responseACK:
 
                 this->mFrameState = MELIBUAnalyzerResults::NoFrame;
-                if( byteFrame.mData1 != 0x7e ) { // add marker is ack value is not 0x7E (0x7E means that reception of the frame was OK)
+                if( byteFrame.mData1 != ack_value ) { // add marker is ack value is not 0x7E (0x7E means that reception of the frame was OK)
                     this->mResults->AddMarker( this->mSerial->GetSampleNumber(),
                                                AnalyzerResults::ErrorSquare,
                                                this->mSettings->mInputChannel );

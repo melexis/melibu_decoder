@@ -28,18 +28,22 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     double mMELIBUVersion;
     bool mACK;
     bool mLoadSettingsFromMbdf;
+    int mACKValue;
 
     std::map < int, bool > node_ack; // when reading config from mbdf each node can have different bool for receiving ack byte
     const char* dllFolderPath;
     bool settingsFromMBDF;        // varieable indicating if config are loaded from mbdf; used in MELIBUAnalyzer
+    bool pythonScriptError;
 
  protected:
     std::auto_ptr < AnalyzerSettingInterfaceChannel > mInputChannelInterface;
     std::auto_ptr < AnalyzerSettingInterfaceText > mMbdfFileInterface;
-    std::auto_ptr < AnalyzerSettingInterfaceInteger > mBitRateInterface;
-    std::auto_ptr < AnalyzerSettingInterfaceNumberList > mMELIBUVersionInterface;
-    std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBUAckEnabledInterface;
     std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBULoadFromMbdfInterface;
+    std::auto_ptr < AnalyzerSettingInterfaceNumberList > mMELIBUVersionInterface;
+    std::auto_ptr < AnalyzerSettingInterfaceInteger > mBitRateInterface;
+    std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBUAckEnabledInterface;
+    std::auto_ptr < AnalyzerSettingInterfaceText > mAckValueInterface;
+
 
     std::string getDLLPath();
     std::string RunPythonMbdfParser( std::string script_path, std::string other_args );

@@ -24,9 +24,11 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mMELIBUVersion( 1.0 ),
     mACK( false ),
     mMbdfFilepath( "" ),
+    mACKValue( 0x7e ),
+    mLoadSettingsFromMbdf( false ),
     dllFolderPath( "" ),
     settingsFromMBDF( false ),
-    mLoadSettingsFromMbdf( false ) {
+    pythonScriptError( false ) {
 
     mInputChannelInterface.reset( new AnalyzerSettingInterfaceChannel() );
     mInputChannelInterface->SetTitleAndTooltip( "Serial", "Standard MeLiBu analyzer" );
@@ -40,7 +42,7 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mMELIBULoadFromMbdfInterface.reset( new AnalyzerSettingInterfaceBool() );
     mMELIBULoadFromMbdfInterface->SetTitleAndTooltip( "Settings from MBDF",
                                                       "Select if you want to load settings from entered MBDF file." );
-    mMELIBULoadFromMbdfInterface->SetCheckBoxText( "Load settings from MBDF" );
+    mMELIBULoadFromMbdfInterface->SetCheckBoxText( "Load MeLiBu version & bit rate from MBDF" );
     mMELIBULoadFromMbdfInterface->SetValue( mLoadSettingsFromMbdf );
 
     mBitRateInterface.reset( new AnalyzerSettingInterfaceInteger() );
@@ -63,12 +65,18 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mMELIBUAckEnabledInterface->SetCheckBoxText( "ACK" );
     mMELIBUAckEnabledInterface->SetValue( mACK );
 
+    mAckValueInterface.reset( new AnalyzerSettingInterfaceText() );
+    mAckValueInterface->SetTitleAndTooltip( "ACK value (only for MeLiBu 2)", "Define valid ACK value for MeLiBu 2" );
+    mAckValueInterface->SetTextType( AnalyzerSettingInterfaceText::NormalText );
+    mAckValueInterface->SetText( ( std::to_string( mACKValue ) ).c_str() );
+
     AddInterface( mInputChannelInterface.get() );
     AddInterface( mMbdfFileInterface.get() );
     AddInterface( mMELIBULoadFromMbdfInterface.get() );
     AddInterface( mBitRateInterface.get() );
     AddInterface( mMELIBUVersionInterface.get() );
     AddInterface( mMELIBUAckEnabledInterface.get() );
+    AddInterface( mAckValueInterface.get() );
 
     // no effect when calling these 4 functions
     // custom export options are not supported in V2
@@ -91,6 +99,7 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     this->mLoadSettingsFromMbdf = this->mMELIBULoadFromMbdfInterface->GetValue();
     this->mBitRate = this->mBitRateInterface->GetInteger();
     this->mMELIBUVersion = this->mMELIBUVersionInterface->GetNumber();
+    this->mACKValue = std::stoul( this->mAckValueInterface->GetText(), nullptr, 16 );
 
     this->settingsFromMBDF = false; // reset
     this->node_ack.clear();         // empty (node,ack) map
@@ -105,11 +114,13 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     struct stat sb;
     if( ( stat( this->mMbdfFilepath, &sb ) == 0 ) && this->mLoadSettingsFromMbdf ) { // run python script and save values to vars
         std::string python_output = RunPythonMbdfParser( python_script_path, "" );
-        if( python_output == "" )
-            throw std::invalid_argument( "a or b negative" );
-        if( python_output != "" ) { // error in python script
+        if( python_output == "" ) { // error in python script
+            this->pythonScriptError = true;
+            this->settingsFromMBDF = false;
+        } else {
             parsePythonOutput( python_output ); // parse python output and save values to class variables
             this->settingsFromMBDF = true;
+            this->pythonScriptError = false;
         }
     }
     ClearChannels();
