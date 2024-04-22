@@ -7,9 +7,9 @@ from saleae.data import GraphTimeDelta, GraphTime
 import sys
 import os
 
-MY_ADDITIONAL_PACKAGES_PATH = os.path.abspath(os.path.dirname(__file__)) + "\melexis\python\lib\\site-packages" 
-if MY_ADDITIONAL_PACKAGES_PATH not in sys.path:
-    sys.path.append(MY_ADDITIONAL_PACKAGES_PATH)
+# MY_ADDITIONAL_PACKAGES_PATH = os.path.abspath(os.path.dirname(__file__)) + "\melexis\python\lib\\site-packages" 
+# if MY_ADDITIONAL_PACKAGES_PATH not in sys.path:
+#     sys.path.append(MY_ADDITIONAL_PACKAGES_PATH)
 
 import logging
 import shutil

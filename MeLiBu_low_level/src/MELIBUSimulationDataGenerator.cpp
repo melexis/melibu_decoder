@@ -185,8 +185,11 @@ void MELIBUSimulationDataGenerator::ReadSimulationBytes() {
                        &hm );
     GetModuleFileName( hm, path, sizeof( path ) );
     std::string filepath = path;
-    std::size_t found = filepath.find_last_of( "/\\" );
-    filepath = filepath.substr( 0, found ) + "\\simulated_data.csv";
+    for( int i = 0; i < 4; i++ ) {
+        std::size_t found = filepath.find_last_of( "/\\" );
+        filepath = filepath.substr( 0, found );
+    }
+    filepath += "\\simulated_data.csv";
 
     std::fstream fin;
     fin.open( filepath, std::ios::in );

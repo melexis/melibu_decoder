@@ -23,6 +23,7 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
 
     // variables to store UI inputs
     Channel mInputChannel;
+    const char* mPythonExe;
     const char* mMbdfFilepath;
     U32 mBitRate;
     double mMELIBUVersion;
@@ -31,12 +32,12 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     int mACKValue;
 
     std::map < int, bool > node_ack; // when reading config from mbdf each node can have different bool for receiving ack byte
-    const char* dllFolderPath;
     bool settingsFromMBDF;        // varieable indicating if config are loaded from mbdf; used in MELIBUAnalyzer
     bool pythonScriptError;
 
  protected:
     std::auto_ptr < AnalyzerSettingInterfaceChannel > mInputChannelInterface;
+    std::auto_ptr < AnalyzerSettingInterfaceText > mPythonExeInterface;
     std::auto_ptr < AnalyzerSettingInterfaceText > mMbdfFileInterface;
     std::auto_ptr < AnalyzerSettingInterfaceBool > mMELIBULoadFromMbdfInterface;
     std::auto_ptr < AnalyzerSettingInterfaceNumberList > mMELIBUVersionInterface;

@@ -1,6 +1,10 @@
 # melibu_decoder
 
+This repository contains both low level and high level analyzer for MeLiBu decoding. To use these analyzers check README files in both folders.
 
+LLA needs to be built and imported in Logic app, while HLA can be added from the app as an extension.
+
+Check user manual to see how to use analyzers with Logic app.
 
 ## Getting started
 

@@ -20,19 +20,24 @@
 // set initial values for variables and add input interfaces
 MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     : mInputChannel( UNDEFINED_CHANNEL ),
+    mPythonExe( "python" ),
     mBitRate{ 1000000 },
     mMELIBUVersion( 1.0 ),
     mACK( false ),
     mMbdfFilepath( "" ),
     mACKValue( 0x7e ),
     mLoadSettingsFromMbdf( false ),
-    dllFolderPath( "" ),
     settingsFromMBDF( false ),
     pythonScriptError( false ) {
 
     mInputChannelInterface.reset( new AnalyzerSettingInterfaceChannel() );
     mInputChannelInterface->SetTitleAndTooltip( "Serial", "Standard MeLiBu analyzer" );
     mInputChannelInterface->SetChannel( mInputChannel );
+
+    mPythonExeInterface.reset( new AnalyzerSettingInterfaceText() );
+    mPythonExeInterface->SetTitleAndTooltip( "Python path", "Python path" );
+    mPythonExeInterface->SetTextType( AnalyzerSettingInterfaceText::NormalText );
+    mPythonExeInterface->SetText( mPythonExe );
 
     mMbdfFileInterface.reset( new AnalyzerSettingInterfaceText() );
     mMbdfFileInterface->SetTitleAndTooltip( "MBDF filepath", "MBDF filepath" );
@@ -71,6 +76,7 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mAckValueInterface->SetText( ( std::to_string( mACKValue ) ).c_str() );
 
     AddInterface( mInputChannelInterface.get() );
+    AddInterface( mPythonExeInterface.get() );
     AddInterface( mMbdfFileInterface.get() );
     AddInterface( mMELIBULoadFromMbdfInterface.get() );
     AddInterface( mBitRateInterface.get() );
@@ -94,6 +100,7 @@ MELIBUAnalyzerSettings::~MELIBUAnalyzerSettings() {}
 bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     // set vars from UI
     this->mInputChannel = this->mInputChannelInterface->GetChannel();
+    this->mPythonExe = this->mPythonExeInterface->GetText();
     this->mMbdfFilepath = this->mMbdfFileInterface->GetText();
     this->mACK = this->mMELIBUAckEnabledInterface->GetValue();
     this->mLoadSettingsFromMbdf = this->mMELIBULoadFromMbdfInterface->GetValue();
@@ -105,10 +112,14 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     this->node_ack.clear();         // empty (node,ack) map
 
     // get dll path and create path to python script
-    std::string dll_path = getDLLPath();
-    std::size_t found = dll_path.find_last_of( "/\\" );
-    this->dllFolderPath = dll_path.substr( 0, found ).c_str();
-    std::string python_script_path = dll_path.substr( 0, found ) + "\\read_mbdf.py";
+    std::string dll_path = getDLLPath(); // .../MeLiBu_low_level/build/Analyzers/Release/MELIBUAnalyzer.dll
+    std::string python_script_path = dll_path;
+    for( int i = 0; i < 4; i++ ) {
+        std::size_t found = dll_path.find_last_of( "/\\" );
+        python_script_path = dll_path.substr( 0, found );
+    }
+    // python_script_path =  .../MeLiBu_low_level
+    python_script_path += "\\read_mbdf.py";
 
     // check if mbdf file path exists
     struct stat sb;
@@ -167,8 +178,7 @@ const char* MELIBUAnalyzerSettings::SaveSettings() {
 }
 
 std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path, std::string other_args ) {
-    std::string python_exe_path = this->dllFolderPath;
-    python_exe_path += "\\Melexis\\Python\\python.exe";
+    std::string python_exe_path = this->mPythonExe;
     std::string whole_input = python_exe_path + " " + script_path + " " + this->mMbdfFilepath + " " + other_args;
     std::array < char, 256 > buffer;
     std::string result;
