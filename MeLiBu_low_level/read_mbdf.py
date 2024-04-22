@@ -15,21 +15,21 @@ import unittest
 import sys
 import os
 
-sys.path = []
-sys.path.append("C:\\Program Files\\Logic\\resources\\windows-x64\\pythonlibs\\python38.zip")
-sys.path.append("C:\\Program Files\\Logic\\resources\\windows-x64\\pythonlibs\\lib\\site-packages")
-sys.path.append("C:\\Program Files\\Logic\\resources\\windows-x64\\pythonlibs\\DLLs")
+# sys.path = []
+# sys.path.append("C:\\Program Files\\Logic\\resources\\windows-x64\\pythonlibs\\python38.zip")
+# sys.path.append("C:\\Program Files\\Logic\\resources\\windows-x64\\pythonlibs\\lib\\site-packages")
+# sys.path.append("C:\\Program Files\\Logic\\resources\\windows-x64\\pythonlibs\\DLLs")
 # MY_ADDITIONAL_PACKAGES_PATH = os.path.abspath(os.path.dirname(__file__)) + "\melexis\python\lib\\site-packages"  
-# # MY_ADDITIONAL_PACKAGES_PATH = "C:\\Program Files (x86)\\Melexis\\Python\\Lib\\site-packages" 
-# if MY_ADDITIONAL_PACKAGES_PATH not in sys.path:
-#      sys.path.append(MY_ADDITIONAL_PACKAGES_PATH)
+MY_ADDITIONAL_PACKAGES_PATH = "C:\\Program Files\\Logic\\resources\\windows-x64\\pythonlibs\\lib\\site-packages"
+if MY_ADDITIONAL_PACKAGES_PATH not in sys.path:
+      sys.path.append(MY_ADDITIONAL_PACKAGES_PATH)
 
 from pymbdfparser import ParserApplication
 from pymbdfparser.model import CommandFrameMelibu1, LedFrameMelibu1, FrameMelibu2
 from pymbdfparser.model.script_frame import ScriptFrameBase
 
-# filepath = sys.argv[1]
-filepath = "C:\\Projects\\melibu_decoder\\validation\\melibu_testing\\melibu_2\\Melexis_MeLiBu_MLX80142_1.MBDF"
+filepath = sys.argv[1]
+# filepath = "C:\\Projects\\melibu_decoder\\validation\\melibu_testing\\melibu_2\\Melexis_MeLiBu_MLX80142.MBDF"
 app = ParserApplication(Path(filepath))
 app.run()
 model = app.model

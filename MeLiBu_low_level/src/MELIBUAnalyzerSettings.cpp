@@ -115,11 +115,14 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     std::string dll_path = getDLLPath(); // .../MeLiBu_low_level/build/Analyzers/Release/MELIBUAnalyzer.dll
     std::string python_script_path = dll_path;
     for( int i = 0; i < 4; i++ ) {
-        std::size_t found = dll_path.find_last_of( "/\\" );
-        python_script_path = dll_path.substr( 0, found );
+        std::size_t found = python_script_path.find_last_of( "/\\" );
+        python_script_path = python_script_path.substr( 0, found );
     }
     // python_script_path =  .../MeLiBu_low_level
     python_script_path += "\\read_mbdf.py";
+    std::ofstream outfile;
+    outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBu_low_level\\filename.txt", std::ios_base::app ); //
+    outfile << python_script_path << "\n-------------\n";
 
     // check if mbdf file path exists
     struct stat sb;
