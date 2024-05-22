@@ -29,7 +29,6 @@ from pymbdfparser.model import CommandFrameMelibu1, LedFrameMelibu1, FrameMelibu
 from pymbdfparser.model.script_frame import ScriptFrameBase
 
 filepath = sys.argv[1]
-# filepath = "C:\\Projects\\melibu_decoder\\validation\\melibu_testing\\melibu_2\\Melexis_MeLiBu_MLX80142.MBDF"
 app = ParserApplication(Path(filepath))
 app.run()
 model = app.model

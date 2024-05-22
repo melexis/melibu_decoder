@@ -40,12 +40,8 @@ void MELIBUAnalyzer::WorkerThread() {
     bool ready_to_save { false };
     bool is_start_of_packet { false };
 
-    U8 id1 { 0 };                // header id1 value
-    U8 id2 { 0 };                // header id2 value
+    U8 id[] { 0, 0 }; // header id values
     U16 crc { 0 };               // crc value read from crc byte fields
-    bool ack = this->mSettings->mACK; // read ack byte? read when ack is enabled and when message is from master to slave (R/T bit)
-    bool add_to_crc { false };   // add byte value to calculated crc? all types of bytes are added to crc except headerBreak, responseCRC1, responseCRC2 and responseACK
-    std::ostringstream ss;      // used for formating byte values to string
     U8 ack_value = this->mSettings->mMELIBUVersion == 2.0 ? this->mSettings->mACKValue : 0x7E;
 
     ibsFrame.mData1 = 0;
@@ -61,20 +57,17 @@ void MELIBUAnalyzer::WorkerThread() {
 
     for( ; ; ) {
         ReadFrame( byteFrame, ibsFrame, is_data_really_break, byteFramingError ); // read byte frame or header break
+        AddToCrc( byteFrame );
 
         if( is_data_really_break ) // break field found insted of byte frame; this is not regular situation
             AddMissingByteFrame( ibsFrame );
 
         is_start_of_packet = false;
         ready_to_save = false;
-        add_to_crc = false;
 
         // in each case set mFrameState for next iteration
         switch( this->mFrameState ) {
             case MELIBUAnalyzerResults::NoFrame:
-
-                this->mFrameState = MELIBUAnalyzerResults::headerBreak;
-
             case MELIBUAnalyzerResults::headerBreak:
 
                 if( byteFrame.mData1 == 0x00 ) {
@@ -91,30 +84,26 @@ void MELIBUAnalyzer::WorkerThread() {
             case MELIBUAnalyzerResults::headerID1:
 
                 this->mFrameState = MELIBUAnalyzerResults::headerID2;
-                id1 = byteFrame.mData1; // save byte value to id1
-                add_to_crc = true;
+                id[0] = byteFrame.mData1; // save byte value to id1
                 break;
 
             case MELIBUAnalyzerResults::headerID2:
 
-                id2 = byteFrame.mData1; // save byte value to id2
-                nDataBytes = NumberOfDataBytes( id1, id2 );
+                id[1] = byteFrame.mData1; // save byte value to id2
+                nDataBytes = NumberOfDataBytes( id[ 0 ], id[1] );
 
                 if( nDataBytes == 0 )
                     this->mFrameState = MELIBUAnalyzerResults::responseCRC1;
                 else
                     this->mFrameState = MELIBUAnalyzerResults::responseDataZero;
                 // if instruction bit is set read two bytes for instruction; only possible for MELIBU 2
-                if( this->mSettings->mMELIBUVersion == 2.0 && ( id2 & 0x04 ) != 0 )
+                if( this->mSettings->mMELIBUVersion == 2.0 && ( id[1] & 0x04 ) != 0 )
                     this->mFrameState = MELIBUAnalyzerResults::instruction1;
-                ack = SendAckByte( id1, id2 );
-                add_to_crc = true;
                 break;
 
             case MELIBUAnalyzerResults::instruction1:
 
                 this->mFrameState = MELIBUAnalyzerResults::instruction2;
-                add_to_crc = true;
                 break;
 
             case MELIBUAnalyzerResults::instruction2:
@@ -123,13 +112,11 @@ void MELIBUAnalyzer::WorkerThread() {
                     this->mFrameState = MELIBUAnalyzerResults::responseCRC1;
                 else
                     this->mFrameState = MELIBUAnalyzerResults::responseDataZero;
-                add_to_crc = true;
                 break;
 
             case MELIBUAnalyzerResults::responseDataZero:
 
                 this->mFrameState = MELIBUAnalyzerResults::responseData;
-                add_to_crc = true;
                 nDataBytes--;
                 break;
 
@@ -139,7 +126,6 @@ void MELIBUAnalyzer::WorkerThread() {
                 if(nDataBytes == 1)
                     this->mFrameState = MELIBUAnalyzerResults::responseCRC1;
                 nDataBytes--;
-                add_to_crc = true;
                 break;
 
             case MELIBUAnalyzerResults::responseCRC1:
@@ -149,7 +135,8 @@ void MELIBUAnalyzer::WorkerThread() {
                 break;
 
             case MELIBUAnalyzerResults::responseCRC2:
-
+            {
+                bool ack = SendAckByte( id[ 0 ], id[ 1 ] );
                 this->mFrameState = ack ? MELIBUAnalyzerResults::responseACK : MELIBUAnalyzerResults::NoFrame;
                 ready_to_save = !ack; // if we need to read ack byte data is not ready for saving
                 CrcFrameValue( crc, byteFrame.mData1, 1 );
@@ -161,7 +148,7 @@ void MELIBUAnalyzer::WorkerThread() {
                                                this->mSettings->mInputChannel );
                 }
                 break;
-
+            }
             case MELIBUAnalyzerResults::responseACK:
 
                 this->mFrameState = MELIBUAnalyzerResults::NoFrame;
@@ -177,15 +164,13 @@ void MELIBUAnalyzer::WorkerThread() {
 
         }
 
-        AddToCrc( add_to_crc, byteFrame );
-
-        byteFrame.mData2 = NumberOfDataBytes( id1, id2 ) - nDataBytes; // number of data in message
+        byteFrame.mData2 = NumberOfDataBytes( id[0], id[1] ) - nDataBytes; // number of data in message
 
         if( is_start_of_packet )
             this->mResults->CommitPacketAndStartNewPacket(); // commit previous packet
 
         this->mResults->AddFrame( byteFrame ); // add frame to graph view
-        AddFrameToTable( byteFrame, ss );      // add frame to tabular view
+        AddFrameToTable( byteFrame );      // add frame to tabular view
 
         if( ready_to_save )
             this->mResults->CommitPacketAndStartNewPacket();
@@ -220,53 +205,35 @@ void MELIBUAnalyzer::Advance( U16 nBits ) {
 U8 MELIBUAnalyzer::NumberOfDataBytes( U8 idField1, U8 idField2 ) {
     // in this function function select bit needs to be extracted first
     // number of data bytes in message are calculated based on function select bit and MELIBU version
-    U8 length = 0;
-    U8 functionSelect = 0;
+
     if( this->mSettings->mMELIBUVersion >= 2 ) {
-        functionSelect = idField2 & 0x02; // 0x02 = 0000 0010; extract value in second bit
-        length = idField2 & 0x38;         // 0x38 = 0011 1000; extraxt bits on 3, 4 and 5 places
+        U8 functionSelect = idField2 & 0x02; // 0x02 = 0000 0010; extract value in second bit
+        U8 length = idField2 & 0x38;         // 0x38 = 0011 1000; extraxt bits on 3, 4 and 5 places
         length = length >> 3;             // right shift to get 3bit value
         if( functionSelect == 0 ) {
             switch( length ) {
-                case 0:
-                    return 0;
-                case 1:
-                    return 2;
-                case 2:
-                    return 4;
-                case 3:
-                    return 6;
-                case 4:
-                    return 8;
-                case 5:
-                    return 10;
                 case 6:
                     return 18;
                 case 7:
                     return 24;
+                default: // 0,1,2,3,4,5 cases
+                    return length * 2;
             }
         } else {
             switch( length ) {
                 case 0:
                     return 6;
-                case 1:
-                    return 12;
-                case 2:
-                    return 24;
-                case 3:
-                    return 36;
-                case 4:
-                    return 48;
-                case 5:
-                    return 60;
                 case 6:
                     return 84;
                 case 7:
                     return 128;
+                default: // 1,2,3,4,5 cases
+                    return length * 12;
             }
         }
     } else {
-        functionSelect = idField1 & 0x01; // 0x01 = 0000 0001
+        U8 functionSelect = idField1 & 0x01; // 0x01 = 0000 0001
+        U8 length { 0 };
         if( functionSelect == 0 ) {
             length = idField2 & 0x1c;     // 0x1c = 0001 1100
             std::bitset < 8 > n( length );   // number of set bits in number
@@ -291,12 +258,12 @@ void MELIBUAnalyzer::FormatValue( std::ostringstream& ss, U64 value, U8 precisio
 }
 
 U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& framingError, bool& toggling ) {
-    U32 min_break_field_low_bits = 13; // for MeLiBu 1
+    U32 min_break_field_low_bits { 13 }; // for MeLiBu 1
     if( this->mSettings->mMELIBUVersion >= 2.0 )
         min_break_field_low_bits = 11; // for MeLiBu 2
 
-    U32 num_break_bits = 0;
-    bool valid_frame = false;
+    U32 num_break_bits { 0 };
+    bool valid_frame { false };
     StartingSampleInBreakField( min_break_field_low_bits, startingSample, num_break_bits, valid_frame, toggling );
 
     // sample (add marker) each byte of break field at the middle of bit
@@ -323,16 +290,10 @@ U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& 
                                    this->mSettings->mInputChannel );
         framingError = true;
     }
+
     // after all advancing we are now in the middle of stop bit
-    // we need to advance more by half of the bit but not to advance to low bit because it is start bit of next byte
-    if( this->mSerial->WouldAdvancingCauseTransition( HalfSamplesPerBit() ) ) {
-        this->mSerial->AdvanceToAbsPosition( this->mSerial->GetSampleOfNextEdge() - 1 ); // advance to position before next edge
-        this->mResults->AddMarker( this->mSerial->GetSampleNumber(),
-                                   AnalyzerResults::ErrorX,
-                                   this->mSettings->mInputChannel );                                                            // add marker because this means that bit is not long enough
-    } else
-        this->mSerial->Advance( HalfSamplesPerBit() ); // advance to end of stop bit
-    endingSample = this->mSerial->GetSampleNumber();
+    SetEndingSampleInStopBit( endingSample );
+    this->mSerial->AdvanceToAbsPosition( this->mSerial->GetSampleOfNextEdge() - 1 );
 
     return ( valid_frame ) ? 0 : 1;
 }
@@ -409,18 +370,13 @@ U8 MELIBUAnalyzer::ByteFrame( S64& startingSample, S64& endingSample, bool& fram
 
     }
 
-    // advance to end of stop bit (half samples per bit or to sample before falling edge)
-    if( this->mSerial->GetSampleOfNextEdge() - this->mSerial->GetSampleNumber() > HalfSamplesPerBit() )
-        endingSample = this->mSerial->GetSampleNumber() + HalfSamplesPerBit();
-    else
-        endingSample = this->mSerial->GetSampleOfNextEdge();
-
+    SetEndingSampleInStopBit( endingSample );
     this->mSerial->AdvanceToAbsPosition( this->mSerial->GetSampleOfNextEdge() - 1 );
 
     return data;
 }
 
-void MELIBUAnalyzer::StartingSampleInBreakField( U32 minBreakFieldBits,
+void MELIBUAnalyzer::StartingSampleInBreakField( U32& minBreakFieldBits,
                                                  S64& startingSample,
                                                  U32& num_break_bits,
                                                  bool& valid_frame,
@@ -449,10 +405,17 @@ void MELIBUAnalyzer::StartingSampleInBreakField( U32 minBreakFieldBits,
     }
 }
 
-bool MELIBUAnalyzer::SendAckByte( U8 idField1, U8 idField2 ) {
+void MELIBUAnalyzer::SetEndingSampleInStopBit( S64& endingSample ) {
+    if( this->mSerial->GetSampleOfNextEdge() - this->mSerial->GetSampleNumber() > HalfSamplesPerBit() )
+        endingSample = this->mSerial->GetSampleNumber() + HalfSamplesPerBit();
+    else
+        endingSample = this->mSerial->GetSampleOfNextEdge();
+}
+
+bool MELIBUAnalyzer::SendAckByte( U8& idField1, U8& idField2 ) {
     bool ack;
 
-    if( this->mSettings->settingsFromMBDF ) { // get node setting for ack from map created based on mbdf file
+    if( this->mSettings->settingsFlag == MELIBUAnalyzerSettings::FromMBDF ) { // get node setting for ack from map created based on mbdf file
         U8 slaveAdr = 0;
         if( this->mSettings->mMELIBUVersion < 2.0 )
             slaveAdr = ( idField1 & 0xfc ) >> 2;
@@ -470,14 +433,21 @@ bool MELIBUAnalyzer::SendAckByte( U8 idField1, U8 idField2 ) {
     return ack;
 }
 
-void MELIBUAnalyzer::AddToCrc( bool addToCrc, Frame byte ) {
-    if( addToCrc ) { // add byte value to crc if needed
-        this->mCRC.add( byte.mData1 );
+void MELIBUAnalyzer::AddToCrc( Frame& byte ) {
+    switch(this->mFrameState) {
+        case MELIBUAnalyzerResults::headerID1:
+        case MELIBUAnalyzerResults::headerID2:
+        case MELIBUAnalyzerResults::instruction1:
+        case MELIBUAnalyzerResults::instruction2:
+        case MELIBUAnalyzerResults::responseDataZero:
+        case MELIBUAnalyzerResults::responseData:
+            this->mCRC.add( byte.mData1 );
     }
 }
 
-void MELIBUAnalyzer::AddFrameToTable( Frame f, std::ostringstream& ss ) {
+void MELIBUAnalyzer::AddFrameToTable( Frame& f ) {
     FrameV2 frame_v2; // frameV2 is used for tabular view of data bytes in UI
+    std::ostringstream ss;
 
     switch( static_cast < MELIBUAnalyzerResults::tMELIBUFrameState > ( f.mType ) ) {
         case MELIBUAnalyzerResults::headerID1:

@@ -27,8 +27,7 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mMbdfFilepath( "" ),
     mACKValue( 0x7e ),
     mLoadSettingsFromMbdf( false ),
-    settingsFromMBDF( false ),
-    pythonScriptError( false ) {
+    settingsFlag( FromUI ) {
 
     mInputChannelInterface.reset( new AnalyzerSettingInterfaceChannel() );
     mInputChannelInterface->SetTitleAndTooltip( "Serial", "Standard MeLiBu analyzer" );
@@ -108,35 +107,31 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     this->mMELIBUVersion = this->mMELIBUVersionInterface->GetNumber();
     this->mACKValue = std::stoul( this->mAckValueInterface->GetText(), nullptr, 16 );
 
-    this->settingsFromMBDF = false; // reset
-    this->node_ack.clear();         // empty (node,ack) map
+    this->node_ack.clear();// empty (node,ack) map
+    this->settingsFlag = FromUI;
 
-    // get dll path and create path to python script
-    std::string dll_path = getDLLPath(); // .../MeLiBu_low_level/build/Analyzers/Release/MELIBUAnalyzer.dll
-    std::string python_script_path = dll_path;
-    for( int i = 0; i < 4; i++ ) {
-        std::size_t found = python_script_path.find_last_of( "/\\" );
-        python_script_path = python_script_path.substr( 0, found );
-    }
-    // python_script_path =  .../MeLiBu_low_level
-    python_script_path += "\\read_mbdf.py";
-    std::ofstream outfile;
-    outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBu_low_level\\filename.txt", std::ios_base::app ); //
-    outfile << python_script_path << "\n-------------\n";
-
-    // check if mbdf file path exists
-    struct stat sb;
-    if( ( stat( this->mMbdfFilepath, &sb ) == 0 ) && this->mLoadSettingsFromMbdf ) { // run python script and save values to vars
-        std::string python_output = RunPythonMbdfParser( python_script_path, "" );
-        if( python_output == "" ) { // error in python script
-            this->pythonScriptError = true;
-            this->settingsFromMBDF = false;
+    if( this->mLoadSettingsFromMbdf ) {
+        this->settingsFlag = FromMBDF;
+        std::string python_script_path = getPythonScriptPath();
+        struct stat sb;
+        if( ( stat( this->mMbdfFilepath, &sb ) == 0 ) ) { // checks if mbdf filepath is valid
+            std::string python_output = RunPythonMbdfParser( python_script_path );
+            if( python_output == "" ) { // error in python script
+                this->settingsFlag = PythonError;
+            } else {
+                parsePythonOutput( python_output ); // parse python output and save values to class variables
+            }
         } else {
-            parsePythonOutput( python_output ); // parse python output and save values to class variables
-            this->settingsFromMBDF = true;
-            this->pythonScriptError = false;
+            this->settingsFlag = MBDFPathError;
         }
+
     }
+
+    //std::ofstream outfile;
+    //outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBu_low_level\\filename.txt", std::ios_base::app ); //
+    //outfile << python_script_path << "\n-------------\n";
+    // outfile.close();
+
     ClearChannels();
     AddChannel( this->mInputChannel, "MeLiBu analyzer", true );
 
@@ -180,9 +175,9 @@ const char* MELIBUAnalyzerSettings::SaveSettings() {
     return SetReturnString( text_archive.GetString() );
 }
 
-std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path, std::string other_args ) {
+std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string& script_path) {
     std::string python_exe_path = this->mPythonExe;
-    std::string whole_input = python_exe_path + " " + script_path + " " + this->mMbdfFilepath + " " + other_args;
+    std::string whole_input = python_exe_path + " " + script_path + " " + this->mMbdfFilepath;
     std::array < char, 256 > buffer;
     std::string result;
     std::shared_ptr < FILE > pipe( _popen( whole_input.c_str(), "r" ), _pclose );
@@ -198,14 +193,13 @@ std::string MELIBUAnalyzerSettings::RunPythonMbdfParser( std::string script_path
     return result;
 }
 
-void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
-    //std::ofstream outfile;
-    //outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBuAnalyzer\\build\\Analyzers\\Release\\filename.txt", std::ios_base::app ); // append instead of overwrite
-    //outfile << output << "\n-------------\n";
+void MELIBUAnalyzerSettings::parsePythonOutput( std::string& output ) {
     this->mMELIBUVersion = stod( output.substr( 0, output.find_first_of( "\n" ) ) );   // read first line
     output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 ); // delete first line
+
     this->mBitRate = stod( output.substr( 0, output.find_first_of( "\n" ) ) );         // read first line
     output.erase( output.begin(), output.begin() + output.find_first_of( "\n" ) + 1 ); // delete first line
+
     // read first line and delete it while there are no lines to read
     while( output != "" ) {
         U8 slaveAdr = stoi( output.substr( 0, output.find_first_of( "\n" ) ) );
@@ -227,7 +221,7 @@ void MELIBUAnalyzerSettings::parsePythonOutput( std::string output ) {
 
 void helperFcn() {}; // used for getDLLPath()
 
-std::string MELIBUAnalyzerSettings::getDLLPath() {
+std::string MELIBUAnalyzerSettings::getPythonScriptPath() {
     char path[ MAX_PATH ];
     HMODULE hm = NULL;
     GetModuleHandleEx( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -235,5 +229,12 @@ std::string MELIBUAnalyzerSettings::getDLLPath() {
                        &hm );
     GetModuleFileName( hm, path, sizeof( path ) );
 
-    return path;
+    std::string python_script_path = path;
+    for( int i = 0; i < 4; i++ ) {
+        std::size_t found = python_script_path.find_last_of( "/\\" );
+        python_script_path = python_script_path.substr( 0, found );
+    }
+    python_script_path += "\\read_mbdf.py";
+
+    return python_script_path;
 }

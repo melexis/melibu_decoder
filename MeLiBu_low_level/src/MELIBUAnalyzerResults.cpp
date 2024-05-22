@@ -200,11 +200,24 @@ void MELIBUAnalyzerResults::GenerateFrameTabularText( U64 frame_index, DisplayBa
     if( this->writeToTerminal == false ) {
         // write loaded melibu version and bit rate
         ClearTabularText();
+
+        switch( this->mSettings->settingsFlag ) {
+            case MELIBUAnalyzerSettings::FromUI:
+                AddTabularText( "Configuration loaded from UI" );
+                break;
+            case MELIBUAnalyzerSettings::FromMBDF:
+                AddTabularText( "Configuration loaded from MBDF" );
+                break;
+            case MELIBUAnalyzerSettings::PythonError:
+                AddTabularText( "Configuration loaded from UI. Error when running python script!" );
+                break;
+            case MELIBUAnalyzerSettings::MBDFPathError:
+                AddTabularText( "Configuration loaded from UI. MBDF path is not valid!" );
+                break;
+        }
         std::ostringstream s;
         s << this->mSettings->mMELIBUVersion;
         std::string version = s.str();
-        AddTabularText( "Configuration loaded from ", this->mSettings->settingsFromMBDF ? "MBDF" : "UI",
-                        this->mSettings->pythonScriptError ? ", ERROR in python script when trying to read MBDF" : "" );
         AddTabularText( "MeLiBu version: ", version.c_str() );
         std::ostringstream s1;
         s1 << this->mSettings->mBitRate;

@@ -73,14 +73,15 @@ class ANALYZER_EXPORT MELIBUAnalyzer: public Analyzer2
 
     U8 GetBreakField( S64& startingSample, S64& endingSample, bool& framingError, bool& toggling );
     U8 ByteFrame( S64& startingSample, S64& endingSample, bool& framingError, bool& is_break_field );
-    void StartingSampleInBreakField( U32 minBreakFieldBits,
+    void StartingSampleInBreakField( U32& minBreakFieldBits,
                                      S64& startingSample,
                                      U32& num_break_bits,
                                      bool& valid_frame,
                                      bool& toggling );
-    bool SendAckByte( U8 idField1, U8 idField2 );
-    void AddToCrc( bool addToCrc, Frame byte );
-    void AddFrameToTable( Frame f, std::ostringstream& ss );
+    void SetEndingSampleInStopBit( S64& endingSample ); // call this function when stop bit is sampled in the middle
+    bool SendAckByte( U8& idField1, U8& idField2 );
+    void AddToCrc( Frame& byte );
+    void AddFrameToTable( Frame& f);
     void ReadFrame( Frame& byteFrame, Frame& ibsFrame, bool& is_data_really_break, bool& byteFramingError );
     void CrcFrameValue( U16& crc, U64 data, U8 frameOrder );
     void AddMissingByteFrame( Frame& ibsFrame );

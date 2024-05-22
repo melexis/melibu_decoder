@@ -16,6 +16,7 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     virtual ~MELIBUAnalyzerSettings();
 
     virtual bool SetSettingsFromInterfaces();
+
     // looks like these three functions are not called from logic application
     virtual void LoadSettings( const char* settings );
     virtual const char* SaveSettings();
@@ -31,9 +32,15 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     bool mLoadSettingsFromMbdf;
     int mACKValue;
 
+    typedef enum {
+        FromUI,
+        FromMBDF,
+        MBDFPathError,
+        PythonError
+    } LoadedSettingsFlag;
+
     std::map < int, bool > node_ack; // when reading config from mbdf each node can have different bool for receiving ack byte
-    bool settingsFromMBDF;        // varieable indicating if config are loaded from mbdf; used in MELIBUAnalyzer
-    bool pythonScriptError;
+    LoadedSettingsFlag settingsFlag; // tells if settings are loaded from UI or MBDF and if there were some errors when loading settings
 
  protected:
     std::auto_ptr < AnalyzerSettingInterfaceChannel > mInputChannelInterface;
@@ -46,9 +53,9 @@ class MELIBUAnalyzerSettings: public AnalyzerSettings
     std::auto_ptr < AnalyzerSettingInterfaceText > mAckValueInterface;
 
 
-    std::string getDLLPath();
-    std::string RunPythonMbdfParser( std::string script_path, std::string other_args );
-    void parsePythonOutput( std::string output );
+    std::string getPythonScriptPath();
+    std::string RunPythonMbdfParser( std::string& script_path);
+    void parsePythonOutput( std::string& output );
 };
 
 #endif //MELIBU_ANALYZER_SETTINGS
