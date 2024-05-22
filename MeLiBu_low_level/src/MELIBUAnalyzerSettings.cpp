@@ -79,8 +79,19 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     this->mACK = this->mMELIBUAckEnabledInterface->GetValue();
     this->mBitRate = this->mBitRateInterface->GetInteger();
     this->mMELIBUVersion = this->mMELIBUVersionInterface->GetNumber();
-    this->mACKValue = std::stoul( this->mAckValueInterface->GetText(), nullptr, 16 );
-
+    try
+    {
+        if( this->mAckValueInterface->GetText()[ 0 ] == '0' &&
+            ( this->mAckValueInterface->GetText()[ 1 ] == 'x' || this->mAckValueInterface->GetText()[ 1 ] == 'X' ) ) {
+            std::string s { this->mAckValueInterface->GetText() };
+            s = s.substr( 2 );
+            this->mACKValue = std::stoul( s, nullptr, 16 );
+        } else
+            this->mACKValue = std::stoul( this->mAckValueInterface->GetText(), nullptr, 10 );
+    }
+    catch( ... ) {
+        this->mACKValue = 0x7E;
+    }
 
     //std::ofstream outfile;
     //outfile.open( "C:\\Projects\\melibu_decoder\\MeLiBu_low_level\\filename.txt", std::ios_base::app ); //
