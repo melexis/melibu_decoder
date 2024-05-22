@@ -28,7 +28,8 @@ from pymbdfparser import ParserApplication
 from pymbdfparser.model import CommandFrameMelibu1, LedFrameMelibu1, FrameMelibu2
 from pymbdfparser.model.script_frame import ScriptFrameBase
 
-filepath = sys.argv[1]
+# filepath = sys.argv[1]
+filepath = input()
 app = ParserApplication(Path(filepath))
 app.run()
 model = app.model
@@ -38,4 +39,6 @@ print(model.bus_speed)
 for node in model.slave_nodes:
     print(model.slave_nodes[node].configured_nad)
     print(model.slave_nodes[node].m2s_ack)
+    
+os.system("pause")
     

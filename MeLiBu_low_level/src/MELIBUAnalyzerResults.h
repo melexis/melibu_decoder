@@ -52,8 +52,6 @@ class MELIBUAnalyzerResults: public AnalyzerResults
  protected: //vars
     MELIBUAnalyzerSettings* mSettings;
     MELIBUAnalyzer* mAnalyzer;
-
-    bool writeToTerminal = false;
 };
 
 #endif //MELIBU_ANALYZER_RESULTS

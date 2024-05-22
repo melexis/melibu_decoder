@@ -197,45 +197,6 @@ void MELIBUAnalyzerResults::GenerateFrameTabularText( U64 frame_index, DisplayBa
      * AnalyzerHelpers::GetNumberString( frame.mData1, display_base, 8, number_str, 128 );
      * AddTabularText( number_str );*/
     ClearTabularText();
-    if( this->writeToTerminal == false ) {
-        // write loaded melibu version and bit rate
-        ClearTabularText();
-
-        switch( this->mSettings->settingsFlag ) {
-            case MELIBUAnalyzerSettings::FromUI:
-                AddTabularText( "Configuration loaded from UI" );
-                break;
-            case MELIBUAnalyzerSettings::FromMBDF:
-                AddTabularText( "Configuration loaded from MBDF" );
-                break;
-            case MELIBUAnalyzerSettings::PythonError:
-                AddTabularText( "Configuration loaded from UI. Error when running python script!" );
-                break;
-            case MELIBUAnalyzerSettings::MBDFPathError:
-                AddTabularText( "Configuration loaded from UI. MBDF path is not valid!" );
-                break;
-        }
-        std::ostringstream s;
-        s << this->mSettings->mMELIBUVersion;
-        std::string version = s.str();
-        AddTabularText( "MeLiBu version: ", version.c_str() );
-        std::ostringstream s1;
-        s1 << this->mSettings->mBitRate;
-        std::string bitrate = s1.str();
-        AddTabularText( "Bit rate: ", bitrate.c_str(), "\n" );
-        writeToTerminal = true;
-
-        //if( !mSettings->node_ack.empty() )
-        //{
-        //    for( std::map<int, bool>::iterator itr = mSettings->node_ack.begin(); itr != mSettings->node_ack.end(); ++itr )
-        //    {
-        //        std::ostringstream s2;
-        //        s2 << "adress: " << itr->first << ", ack_byte: " << itr->second;
-        //        AddTabularText( "SLAVE: ", s2.str().c_str() );
-        //    }
-        //    AddTabularText( "\n" );
-        //}
-    }
 #endif
 }
 

@@ -413,17 +413,7 @@ void MELIBUAnalyzer::SetEndingSampleInStopBit( S64& endingSample ) {
 }
 
 bool MELIBUAnalyzer::SendAckByte( U8& idField1, U8& idField2 ) {
-    bool ack;
-
-    if( this->mSettings->settingsFlag == MELIBUAnalyzerSettings::FromMBDF ) { // get node setting for ack from map created based on mbdf file
-        U8 slaveAdr = 0;
-        if( this->mSettings->mMELIBUVersion < 2.0 )
-            slaveAdr = ( idField1 & 0xfc ) >> 2;
-        else
-            slaveAdr = idField1;
-        ack = this->mSettings->node_ack[ slaveAdr ];
-    } else
-        ack = this->mSettings->mACK;
+    bool ack { this->mSettings->mACK };
 
     // ack is sent only when sent message is master to slave
     if( this->mSettings->mMELIBUVersion == 2.0 )
