@@ -4,18 +4,14 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <iomanip>
 
 #include <cstdio>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <array>
-
-#include <Windows.h>
-
-#include <regex>
-
-#include <stdexcept>
 
 // set initial values for variables and add input interfaces
 MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
@@ -49,10 +45,14 @@ MELIBUAnalyzerSettings::MELIBUAnalyzerSettings()
     mMELIBUAckEnabledInterface->SetCheckBoxText( "ACK" );
     mMELIBUAckEnabledInterface->SetValue( mACK );
 
+    std::stringstream s;
+    s << std::hex << std::uppercase << std::showbase << mACKValue;
+
     mAckValueInterface.reset( new AnalyzerSettingInterfaceText() );
-    mAckValueInterface->SetTitleAndTooltip( "ACK value (only for MeLiBu 2)", "Define valid ACK value for MeLiBu 2" );
+    mAckValueInterface->SetTitleAndTooltip( "MeLiBu 2 ACK value (default 0x7E)",
+                                            "Define valid ACK value for MeLiBu 2" );
     mAckValueInterface->SetTextType( AnalyzerSettingInterfaceText::NormalText );
-    mAckValueInterface->SetText( ( std::to_string( mACKValue ) ).c_str() );
+    mAckValueInterface->SetText( s.str().c_str() );
 
     AddInterface( mInputChannelInterface.get() );
     AddInterface( mBitRateInterface.get() );
@@ -81,12 +81,15 @@ bool MELIBUAnalyzerSettings::SetSettingsFromInterfaces() {
     this->mMELIBUVersion = this->mMELIBUVersionInterface->GetNumber();
     try
     {
+        // hex format
         if( this->mAckValueInterface->GetText()[ 0 ] == '0' &&
             ( this->mAckValueInterface->GetText()[ 1 ] == 'x' || this->mAckValueInterface->GetText()[ 1 ] == 'X' ) ) {
             std::string s { this->mAckValueInterface->GetText() };
             s = s.substr( 2 );
             this->mACKValue = std::stoul( s, nullptr, 16 );
-        } else
+        }
+        // decimal format
+        else
             this->mACKValue = std::stoul( this->mAckValueInterface->GetText(), nullptr, 10 );
     }
     catch( ... ) {
@@ -109,6 +112,9 @@ void MELIBUAnalyzerSettings::UpdateInterfacesFromSettings() {
     this->mBitRateInterface->SetInteger( this->mBitRate );
     this->mMELIBUVersionInterface->SetNumber( this->mMELIBUVersion );
     this->mMELIBUAckEnabledInterface->SetValue( this->mACK );
+    std::stringstream s;
+    s << std::hex << std::uppercase << std::showbase << mACKValue;
+    this->mAckValueInterface->SetText( s.str().c_str() );
 }
 
 void MELIBUAnalyzerSettings::LoadSettings( const char* settings ) {
