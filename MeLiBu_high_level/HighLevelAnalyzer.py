@@ -38,6 +38,9 @@ class Hla(HighLevelAnalyzer):
         'data': {
             'format': 'signal: {{data.signal}}, raw value: {{data.raw_value}}, actual value: {{data.actual_value}}'
         },
+        'multiple_data': {
+            'format': 'sig1: {{data.sig1}}, raw val1: {{data.raw1}}, act val1: {{data.act1}}, sig2: {{data.sig2}}, raw val2: {{data.raw2}}, act val2: {{data.act2}}, sig3: {{data.sig3}}, raw val3: {{data.raw3}}, act val3: {{data.act3}}'
+        },
         'raw data': {
             'format': 'raw value: {{data.raw_value}}'
         },
@@ -82,6 +85,7 @@ class Hla(HighLevelAnalyzer):
         self.id1_start = GraphTime(datetime.now())
         
         self.current_frame = None
+        self.matched_frames = []
         
         self.found_slave = False
         self.matched_frame = False
@@ -110,6 +114,7 @@ class Hla(HighLevelAnalyzer):
         self.matched_frame = False
         self.unique_frame = True
         frame_names = []
+        self.matched_frames = []
         for frame_name in self.model.frames.keys():
             curr_frame = self.model.frames.get(frame_name)
             
@@ -122,16 +127,19 @@ class Hla(HighLevelAnalyzer):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
                     frame_names.append(frame_name)
+                    self.matched_frames.append(curr_frame)
             else:
                 if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.sub_address == frame_size):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
                     frame_names.append(frame_name)
-            if self.matched_frame == True:
-                if len(frame_names) > 1:
-                    self.unique_frame = False
-                self.data_length = self.current_frame.size
-                return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': ', '.join(frame_names), 'frame_info': self.info_str})
+                    self.matched_frames.append(curr_frame)
+        if self.matched_frame == True:
+            if len(frame_names) > 1:
+                self.unique_frame = False
+            # self.data_length = self.current_frame.size
+            self.data_length = (self.matched_frames[0]).size
+            return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': ', '.join(frame_names), 'frame_info': self.info_str})
             
         # if we are here that means no matching fram has ben found and we will return unknown frame
         return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': self.info_str})
@@ -222,11 +230,11 @@ class Hla(HighLevelAnalyzer):
         self.check_slave(slave_adr)
         return self.match_frame_melibu2(frame, rt, func, inst, frame_size, self.inst_word)
        
-    def get_signal_chunks(self):
+    def get_signal_chunks(self, frame):
         if self.protocol_version < 2:
-            return self.current_frame.signal_chunks_big_endian
+            return frame.signal_chunks_big_endian
         else:
-            return self.current_frame.signal_chunks_little_endian
+            return frame.signal_chunks_little_endian
         
     def decode_data(self, frame:AnalyzerFrame):
         self.data_array.append(frame)  # add data byte to array
@@ -239,7 +247,129 @@ class Hla(HighLevelAnalyzer):
             delta_time_float = delta_time.__float__()                                 # convert GraphTimeDelta to float [s]
             delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
             
-            signals = self.get_signal_chunks()
+            signal_names = []
+            signal_raw_vals = []
+            signal_ph_vals = []
+            frame_ind = 0
+            signals_info = []
+            for frame in self.matched_frames:
+                
+                signals = self.get_signal_chunks(frame)
+                signals_sorted = sorted(signals, key = lambda x: x.significance, reverse = False) 
+                signals_dict = dict()
+                
+                for sig in signals_sorted:
+                    # get name, offset and size of signal chunks
+                    name = sig.signal.name
+                    offset = sig.real_offset
+                    size = sig.size
+                    
+                    value = 0
+                    mask = 0
+                    
+                    # connect all bytes values where chunk is located
+                    for i in range(offset//8, (offset + size - 1)//8 + 1):
+                        
+                        curr_val = literal_eval((self.data_array[i].data['data']))
+                        
+                        if self.protocol_version < 2:
+                            value = (value << 8) | curr_val # MSB byte first
+                        else:
+                            value = (curr_val << 8 * (i - offset//8)) | value # LSB byte first
+                            
+                        mask = (mask << 8) | 255 # mask will be all ones with length 8*(number of bytes containing value)
+                         
+                    # extract only part of number -> from local offset with local size
+                    number_size = 8 * ((offset + size - 1)//8 - offset//8 + 1)
+                    mask = (mask >> (offset % 8)) & (mask << (number_size - size - offset % 8))
+                    value = value & mask # extract important bits
+                    value = value >> (number_size - size - offset % 8) # shift value to start from lsb bit
+                    
+                    # connect chunk value with previous
+                    # maybe not working properly for melibu 2, but for melibu 2 there won't be more chunks for one signal
+                    # good for both melibu 1 & 2 because chunks are sorted by significance
+                    if name in signals_dict:
+                        signals_dict[name] = (signals_dict[name] << size) | value
+                    else:
+                        signals_dict[name] = value
+                        
+                signals_sorted = sorted(signals, key=lambda x: x.real_offset, reverse=False)
+                added_signals = []
+                sig_ind = 0
+                for sig in signals_sorted:
+                    if sig.signal.name not in added_signals:
+                        added_signals.append(sig.signal.name)
+                        physical_value = 'None'
+                        if sig.signal.encoding_type != None:
+                            for encoding in sig.signal.encoding_type.encodings:
+                                if encoding.__class__.__name__ == 'PhysicalEncoding':
+                                    if encoding.min_value <= signals_dict[sig.signal.name] <= encoding.max_value:
+                                        physical_value = sig.signal.decode(signals_dict[sig.signal.name])
+                                    break
+                                else:
+                                    physical_value = sig.signal.decode(signals_dict[sig.signal.name])
+                        else:
+                            physical_value = sig.signal.decode(signals_dict[sig.signal.name])
+                        
+                        
+                        if (sig_ind + 1) > len(signals_info):
+                            sig_info = ["","","","","","","","",""]
+                            sig_info[3 * frame_ind] = sig.signal.name
+                            sig_info[3 * frame_ind + 1] = hex(signals_dict[sig.signal.name])
+                            sig_info[3 * frame_ind + 2] = physical_value
+                            signals_info.append(sig_info)
+                        else:
+                            signals_info[sig_ind][3 * frame_ind] = sig.signal.name
+                            signals_info[sig_ind][3 * frame_ind + 1] = hex(signals_dict[sig.signal.name])
+                            signals_info[sig_ind][3 * frame_ind + 2] = physical_value
+
+                        sig_ind = sig_ind + 1
+
+                frame_ind = frame_ind + 1
+                
+                        # calculate delta time between start time of first data frame and start and end of extracted raw values frames
+                        
+                        # offset = real_offset + start bit and stop bit of data before + start bit of current data
+                        # delta_start = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1) * delta_per_bit)
+                        
+                        # offset = real_offset + start bit and stop bit of data before + start bit of current data + signal size + start and stop bit of transitions between data bytes
+                        # delta_end = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1 + sig.size + ((sig.real_offset % 8 + sig.size - 1) // 8) * 2) * delta_per_bit)
+                        
+                        # signal_names.append(sig.signal.name)
+                        # signal_raw_vals.append(hex(signals_dict[sig.signal.name]))
+                        # signal_ph_vals.append(physical_value)
+                        # frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': sig.signal.name,'raw_value': hex(signals_dict[sig.signal.name]), 'actual_value': physical_value}))
+            
+            frames = []
+            sig_len = len(signals_info)
+            delta_per_sig = delta_time_float / sig_len - 2 * delta_per_bit / 100
+            for i in range(sig_len):
+                frames.append(AnalyzerFrame('multiple_data',
+                                            self.data_array[0].start_time + GraphTimeDelta(second = (2 * i + 1) * delta_per_bit / 100 + i * delta_per_sig),
+                                            self.data_array[0].start_time + GraphTimeDelta(second = (2 * i + 2) * delta_per_bit / 100 + (i + 1) * delta_per_sig),
+                                            {'sig1': signals_info[i][0],'raw1': signals_info[i][1], 'act1': signals_info[i][2],
+                                             'sig2': signals_info[i][3],'raw2': signals_info[i][4], 'act2': signals_info[i][5],
+                                             'sig3': signals_info[i][6],'raw3': signals_info[i][7], 'act3': signals_info[i][8]}))
+            # frames.append(AnalyzerFrame('data', self.data_array[0].start_time, self.data_array[-1].start_time, {'signal': ' - '.join(signal_names),'raw_value': ' - '.join(signal_raw_vals), 'actual_value': ' - '.join(signal_ph_vals)}))
+            # frames.append(AnalyzerFrame('data', self.data_array[-1].end_time - GraphTimeDelta(second = delta_per_bit), self.data_array[-1].end_time, {'signal': ' - '.join(signal_names),'raw_value': ' - '.join(signal_raw_vals), 'actual_value': ' - '.join(signal_ph_vals)}))
+            return frames
+                
+        self.data_length = self.data_length - 1 # update data length
+        return []
+    
+    def decode_unique_data(self, frame:AnalyzerFrame):
+        self.data_array.append(frame)  # add data byte to array
+        
+        # only if it is last data byte decode them and return list of frames
+        if self.data_length == 1:
+            frames = [] # array of frames to be returned; this is for tabular view and bar in UI
+            
+            delta_time = self.data_array[-1].end_time - self.data_array[0].start_time # all data bytes duration
+            delta_time_float = delta_time.__float__()                                 # convert GraphTimeDelta to float [s]
+            delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
+            
+            
+            signals = self.get_signal_chunks(self.current_frame)
             signals_sorted = sorted(signals, key = lambda x: x.significance, reverse = False) 
             signals_dict = dict()
             
@@ -299,12 +429,12 @@ class Hla(HighLevelAnalyzer):
                     
                     # offset = real_offset + start bit and stop bit of data before + start bit of current data
                     delta_start = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1) * delta_per_bit)
-                    
                     # offset = real_offset + start bit and stop bit of data before + start bit of current data + signal size + start and stop bit of transitions between data bytes
                     delta_end = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1 + sig.size + ((sig.real_offset % 8 + sig.size - 1) // 8) * 2) * delta_per_bit)
                         
                     frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': sig.signal.name,'raw_value': hex(signals_dict[sig.signal.name]), 'actual_value': physical_value}))
-            
+                    # frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': sig.signal.name,'raw_value': hex(signals_dict[sig.signal.name]), 'actual_value': physical_value}))
+                    
             return frames
                 
         self.data_length = self.data_length - 1 # update data length
@@ -339,7 +469,9 @@ class Hla(HighLevelAnalyzer):
             return self.decode_inst1(frame)
         elif frame.type == 'instruction_byte2':
             return self.decode_inst2(frame)
-        elif (frame.type == 'data') & (self.unique_frame == False) & (self.matched_frame == True):
+        elif (frame.type == 'data') & (self.matched_frame == True) & (self.unique_frame == True):
+            return self.decode_unique_data(frame)
+        elif (frame.type == 'data') & (self.matched_frame == True) & (self.unique_frame == False):
             return self.decode_data(frame)
         elif frame.type == 'data':
             return AnalyzerFrame('raw data', frame.start_time, frame.end_time, {'raw_value': frame.data['data']})
