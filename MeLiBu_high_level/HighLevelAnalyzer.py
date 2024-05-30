@@ -85,6 +85,7 @@ class Hla(HighLevelAnalyzer):
         
         self.found_slave = False
         self.matched_frame = False
+        self.unique_frame = True
                 
     def get_info_from_ids_melibu1(self):      
         # extract values from id fields
@@ -107,6 +108,8 @@ class Hla(HighLevelAnalyzer):
     def match_frame_melibu1(self, frame: AnalyzerFrame, rt_bit, f_bit, inst, frame_size):
         # iterate through all frames in mbdf file and match with frame with same values from id's
         self.matched_frame = False
+        self.unique_frame = True
+        frame_names = []
         for frame_name in self.model.frames.keys():
             curr_frame = self.model.frames.get(frame_name)
             
@@ -118,13 +121,17 @@ class Hla(HighLevelAnalyzer):
                 if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.sub_address == frame_size) & (curr_frame.ext_instruction == inst):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
+                    frame_names.append(frame_name)
             else:
                 if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.sub_address == frame_size):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
-            if self.matched_frame == True & self.found_slave == True:
+                    frame_names.append(frame_name)
+            if self.matched_frame == True:
+                if len(frame_names) > 1:
+                    self.unique_frame = False
                 self.data_length = self.current_frame.size
-                return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str})
+                return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': ', '.join(frame_names), 'frame_info': self.info_str})
             
         # if we are here that means no matching fram has ben found and we will return unknown frame
         return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': self.info_str})
@@ -332,7 +339,7 @@ class Hla(HighLevelAnalyzer):
             return self.decode_inst1(frame)
         elif frame.type == 'instruction_byte2':
             return self.decode_inst2(frame)
-        elif (frame.type == 'data') & (self.found_slave == True) & (self.matched_frame == True):
+        elif (frame.type == 'data') & (self.unique_frame == False) & (self.matched_frame == True):
             return self.decode_data(frame)
         elif frame.type == 'data':
             return AnalyzerFrame('raw data', frame.start_time, frame.end_time, {'raw_value': frame.data['data']})

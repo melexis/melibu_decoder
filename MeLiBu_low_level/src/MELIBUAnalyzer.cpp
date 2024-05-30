@@ -267,18 +267,28 @@ U8 MELIBUAnalyzer::GetBreakField( S64& startingSample, S64& endingSample, bool& 
     StartingSampleInBreakField( min_break_field_low_bits, startingSample, num_break_bits, valid_frame, toggling );
 
     // sample (add marker) each byte of break field at the middle of bit
-    for( U32 i = 0; i < num_break_bits; i++ ) {
-        if( i == 0 )
-            AdvanceHalfBit();
-        else
-            Advance( 1 );
+    /*for( U32 i = 0; i < num_break_bits; i++ )
+     * {
+     *  if( i == 0 )
+     *      AdvanceHalfBit();
+     *  else
+     *      Advance( 1 );
+     *  this->mResults->AddMarker( this->mSerial->GetSampleNumber(),
+     *                             this->mSerial->GetBitState() == BIT_HIGH ? AnalyzerResults::One : AnalyzerResults::Zero,
+     *                             this->mSettings->mInputChannel );
+     * }*/
+
+    // sample each low bit in break field
+    AdvanceHalfBit();
+    while( this->mSerial->GetBitState() == BIT_LOW ) {
         this->mResults->AddMarker( this->mSerial->GetSampleNumber(),
-                                   this->mSerial->GetBitState() == BIT_HIGH ? AnalyzerResults::One : AnalyzerResults::Zero,
+                                   AnalyzerResults::Zero,
                                    this->mSettings->mInputChannel );
+        Advance( 1 );
     }
 
     // validate stop bit
-    Advance( 1 );
+    //Advance( 1 );
     if( this->mSerial->GetBitState() == BIT_HIGH ) {
         this->mResults->AddMarker( this->mSerial->GetSampleNumber(),
                                    AnalyzerResults::Stop,
@@ -416,10 +426,13 @@ bool MELIBUAnalyzer::SendAckByte( U8& idField1, U8& idField2 ) {
     bool ack { this->mSettings->mACK };
 
     // ack is sent only when sent message is master to slave
-    if( this->mSettings->mMELIBUVersion == 2.0 )
+    if( this->mSettings->mMELIBUVersion == 2.0 ) {
         ack &= ( ( idField2 & 0x01 ) == 0 );
-    else
+        ack &= ( idField1 >= 3 );
+    } else {
         ack &= ( ( idField1 & 0x02 ) == 0 );
+        ack &= ( ( ( idField1 & 0xFC ) >> 2 ) >= 3 );
+    }
     return ack;
 }
 
