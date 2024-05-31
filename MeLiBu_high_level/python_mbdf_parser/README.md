@@ -4,7 +4,7 @@ On Windows these have to be installed via PowerShell by using the following comm
 Follow steps:
 
 1. Start the PowerShell as admin
-2. Use command cd folder_path to go to this folder (...\MeLiBu_low_level\python_mbdf_parser)
+2. Use command cd folder_path to go to this folder (...\MeLiBu_high_level\python_mbdf_parser)
 3. Get a list of all Melexis python wheels in folder. Use following command:
 ```
 $WHEEL_FILES = get-childitem *.whl
