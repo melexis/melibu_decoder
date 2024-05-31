@@ -81,6 +81,8 @@ sudo apt-get install build-essential
 
 ## Building your Analyzer
 
+Notes: Please use windows PowerShell and close the Logic app when building.
+
 ### Windows
 
 ```bat
