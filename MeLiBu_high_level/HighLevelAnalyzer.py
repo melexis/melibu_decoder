@@ -39,7 +39,12 @@ class Hla(HighLevelAnalyzer):
             'format': 'signal: {{data.signal}}, raw value: {{data.raw_value}}, actual value: {{data.actual_value}}'
         },
         'multiple_data': {
-            'format': 'sig1: {{data.sig1}}, raw val1: {{data.raw1}}, act val1: {{data.act1}}, sig2: {{data.sig2}}, raw val2: {{data.raw2}}, act val2: {{data.act2}}, sig3: {{data.sig3}}, raw val3: {{data.raw3}}, act val3: {{data.act3}}'
+            'format':
+                'sig alternative 1:{{data.sig_alternative_1}},raw alternative 1: {{data.raw_alternative_1}}, actual alternative 1: {{data.actual_alternative_1}},\
+                    sig alternative 2: {{data.sig_alternative_2}}, raw alternative 2: {{data.raw_alternative_2}}, actual alternative 2: {{data.actual_alternative_2}},\
+                        sig alternative 3: {{data.sig_alternative_3}}, raw alternative 3: {{data.raw_alternative_3}}, actual alternative 3: {{data.actual_alternative_3}},\
+                            sig alternative 4: {{data.sig_alternative_4}}, raw alternative 4: {{data.raw_alternative_4}}, actual alternative 4: {{data.actual_alternative_4}},\
+                                sig alternative 5: {{data.sig_alternative_5}}, raw alternative 5: {{data.raw_alternative_5}}, actual alternative 5: {{data.actual_alternative_5}}'
         },
         'raw data': {
             'format': 'raw value: {{data.raw_value}}'
@@ -137,7 +142,6 @@ class Hla(HighLevelAnalyzer):
         if self.matched_frame == True:
             if len(frame_names) > 1:
                 self.unique_frame = False
-            # self.data_length = self.current_frame.size
             self.data_length = (self.matched_frames[0]).size
             return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': ', '.join(frame_names), 'frame_info': self.info_str})
             
@@ -157,12 +161,15 @@ class Hla(HighLevelAnalyzer):
         if inst == 0:
             self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, I = {i}, PL LENGTH = {pl}'.format(slave = hex(slave_adr), RT = rt, f = func, i = inst, pl = pl_len)
         else:
-            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, I = {i}, PL LENGTH = {pl}, INSTRUCTION = {inst}'.format(slave = hex(slave_adr), RT = rt, f = func, i = inst, pl = pl_len, inst = self.inst_word)
+            self.info_str = 'SLAVE = {slave}, R/T = {RT}, F = {f}, I = {i}, PL LENGTH = {pl}, INSTRUCTION = {inst}'.format(slave = '0x' + hex(slave_adr)[2:].upper(), RT = rt, f = func, i = inst, pl = pl_len, inst = self.inst_word)
         return slave_adr, rt, func, inst, pl_len
     
     def match_frame_melibu2(self, frame: AnalyzerFrame, rt_bit, f_bit, i_bit, frame_size, inst_word):
         # iterate through all frames in mbdf file and match with frame with same values from id's
         self.matched_frame = False
+        self.unique_frame = True
+        frame_names = []
+        self.matched_frames = []
         for frame_name in self.model.frames.keys():
             curr_frame = self.model.frames.get(frame_name)
             
@@ -174,13 +181,19 @@ class Hla(HighLevelAnalyzer):
                 if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.pl_length == frame_size) & (curr_frame.i_bit == i_bit):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
+                    frame_names.append(frame_name)
+                    self.matched_frames.append(curr_frame)
             else:
                 if (curr_frame.r_t_bit == rt_bit) & (f_type == f_bit) & (curr_frame.pl_length == frame_size) & (curr_frame.i_bit == i_bit) & (curr_frame.instruction_word == inst_word):
                     self.current_frame = curr_frame # set current frame for data decoding
                     self.matched_frame = True
-            if self.matched_frame == True & self.found_slave == True:
-                self.data_length = self.current_frame.size
-                return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': frame_name, 'frame_info': self.info_str})
+                    frame_names.append(frame_name)
+                    self.matched_frames.append(curr_frame)
+        if self.matched_frame == True:
+            if len(frame_names) > 1:
+                self.unique_frame = False
+            self.data_length = (self.matched_frames[0]).size
+            return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': ', '.join(frame_names), 'frame_info': self.info_str})
             
         # if we are here that means no matching fram has ben found and we will return unknown frame
         return AnalyzerFrame('header', self.id1_start, frame.end_time, {'frame': "Unknown", 'frame_info': self.info_str})
@@ -247,9 +260,6 @@ class Hla(HighLevelAnalyzer):
             delta_time_float = delta_time.__float__()                                 # convert GraphTimeDelta to float [s]
             delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
             
-            signal_names = []
-            signal_raw_vals = []
-            signal_ph_vals = []
             frame_ind = 0
             signals_info = []
             for frame in self.matched_frames:
@@ -286,8 +296,6 @@ class Hla(HighLevelAnalyzer):
                     value = value >> (number_size - size - offset % 8) # shift value to start from lsb bit
                     
                     # connect chunk value with previous
-                    # maybe not working properly for melibu 2, but for melibu 2 there won't be more chunks for one signal
-                    # good for both melibu 1 & 2 because chunks are sorted by significance
                     if name in signals_dict:
                         signals_dict[name] = (signals_dict[name] << size) | value
                     else:
@@ -313,7 +321,7 @@ class Hla(HighLevelAnalyzer):
                         
                         
                         if (sig_ind + 1) > len(signals_info):
-                            sig_info = ["","","","","","","","",""]
+                            sig_info = [""] * (5*3) # 5 is size of max multiple matched frames; 3 is for sig name, raw val and actual val
                             sig_info[3 * frame_ind] = sig.signal.name
                             sig_info[3 * frame_ind + 1] = hex(signals_dict[sig.signal.name])
                             sig_info[3 * frame_ind + 2] = physical_value
@@ -326,20 +334,9 @@ class Hla(HighLevelAnalyzer):
                         sig_ind = sig_ind + 1
 
                 frame_ind = frame_ind + 1
-                
-                        # calculate delta time between start time of first data frame and start and end of extracted raw values frames
-                        
-                        # offset = real_offset + start bit and stop bit of data before + start bit of current data
-                        # delta_start = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1) * delta_per_bit)
-                        
-                        # offset = real_offset + start bit and stop bit of data before + start bit of current data + signal size + start and stop bit of transitions between data bytes
-                        # delta_end = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1 + sig.size + ((sig.real_offset % 8 + sig.size - 1) // 8) * 2) * delta_per_bit)
-                        
-                        # signal_names.append(sig.signal.name)
-                        # signal_raw_vals.append(hex(signals_dict[sig.signal.name]))
-                        # signal_ph_vals.append(physical_value)
-                        # frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': sig.signal.name,'raw_value': hex(signals_dict[sig.signal.name]), 'actual_value': physical_value}))
-            
+                if frame_ind == 5: # max matched frames is 5
+                    break
+                 
             frames = []
             sig_len = len(signals_info)
             delta_per_sig = delta_time_float / sig_len - 2 * delta_per_bit / 100
@@ -347,11 +344,11 @@ class Hla(HighLevelAnalyzer):
                 frames.append(AnalyzerFrame('multiple_data',
                                             self.data_array[0].start_time + GraphTimeDelta(second = (2 * i + 1) * delta_per_bit / 100 + i * delta_per_sig),
                                             self.data_array[0].start_time + GraphTimeDelta(second = (2 * i + 2) * delta_per_bit / 100 + (i + 1) * delta_per_sig),
-                                            {'sig1': signals_info[i][0],'raw1': signals_info[i][1], 'act1': signals_info[i][2],
-                                             'sig2': signals_info[i][3],'raw2': signals_info[i][4], 'act2': signals_info[i][5],
-                                             'sig3': signals_info[i][6],'raw3': signals_info[i][7], 'act3': signals_info[i][8]}))
-            # frames.append(AnalyzerFrame('data', self.data_array[0].start_time, self.data_array[-1].start_time, {'signal': ' - '.join(signal_names),'raw_value': ' - '.join(signal_raw_vals), 'actual_value': ' - '.join(signal_ph_vals)}))
-            # frames.append(AnalyzerFrame('data', self.data_array[-1].end_time - GraphTimeDelta(second = delta_per_bit), self.data_array[-1].end_time, {'signal': ' - '.join(signal_names),'raw_value': ' - '.join(signal_raw_vals), 'actual_value': ' - '.join(signal_ph_vals)}))
+                                            {'sig_alternative_1': signals_info[i][0],'raw_alternative_1': signals_info[i][1], 'actual_alternative_1': signals_info[i][2],
+                                             'sig_alternative_2': signals_info[i][3],'raw_alternative_2': signals_info[i][4], 'actual_alternative_2': signals_info[i][5],
+                                             'sig_alternative_3': signals_info[i][6],'raw_alternative_3': signals_info[i][7], 'actual_alternative_3': signals_info[i][8],
+                                             'sig_alternative_4': signals_info[i][9],'raw_alternative_4': signals_info[i][10], 'actual_alternative_4': signals_info[i][11],
+                                             'sig_alternative_5': signals_info[i][12],'raw_alternative_5': signals_info[i][13], 'actual_alternative_5': signals_info[i][14]}))
             return frames
                 
         self.data_length = self.data_length - 1 # update data length
@@ -369,7 +366,7 @@ class Hla(HighLevelAnalyzer):
             delta_per_bit = delta_time_float / (10 * len(self.data_array))            # 10 = 8 data bits + start bit + stop bit
             
             
-            signals = self.get_signal_chunks(self.current_frame)
+            signals = self.get_signal_chunks(self.matched_frames[0])
             signals_sorted = sorted(signals, key = lambda x: x.significance, reverse = False) 
             signals_dict = dict()
             
@@ -433,7 +430,6 @@ class Hla(HighLevelAnalyzer):
                     delta_end = GraphTimeDelta(second = (sig.real_offset + (sig.real_offset // 8) * 2 + 1 + sig.size + ((sig.real_offset % 8 + sig.size - 1) // 8) * 2) * delta_per_bit)
                         
                     frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': sig.signal.name,'raw_value': hex(signals_dict[sig.signal.name]), 'actual_value': physical_value}))
-                    # frames.append(AnalyzerFrame('data', self.data_array[0].start_time + delta_start, self.data_array[0].start_time + delta_end, {'signal': sig.signal.name,'raw_value': hex(signals_dict[sig.signal.name]), 'actual_value': physical_value}))
                     
             return frames
                 
