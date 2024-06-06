@@ -1,7 +1,6 @@
-
-  # MeLiBu HLA
+# MeLiBu HLA
   
-  This HLA uses MBDF file to decode message frames.
+This HLA uses MBDF file to decode message frames.
   
 ## Requirements 
 
