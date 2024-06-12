@@ -12,6 +12,10 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 include(ExternalAnalyzerSDK)
 
+if (WIN32)
+  add_definitions(-DBUILD_WIN32)
+endif()
+
 set(SOURCES 
 src/MELIBUAnalyzer.cpp
 src/MELIBUAnalyzer.h

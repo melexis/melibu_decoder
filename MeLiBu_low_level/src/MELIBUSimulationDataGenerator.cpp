@@ -7,7 +7,9 @@
 #include <iostream>
 #include <regex>
 
+#ifdef BUILD_WIN32
 #include <Windows.h>
+#endif
 
 MELIBUSimulationDataGenerator::MELIBUSimulationDataGenerator() {}
 
@@ -178,6 +180,7 @@ void MELIBUSimulationDataGenerator::CreateSerialByteWrongStop( U8 byte ) {
 void helper() {}; // this is only for finding path of dll; this function can't be class member function
 
 void MELIBUSimulationDataGenerator::ReadSimulationBytes() {
+#ifdef BUILD_WIN32
     char path[ MAX_PATH ];
     HMODULE hm = NULL;
     GetModuleHandleEx( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -190,6 +193,9 @@ void MELIBUSimulationDataGenerator::ReadSimulationBytes() {
         filepath = filepath.substr( 0, found );
     }
     filepath += "\\simulated_data.csv";
+#else
+    std::string filepath = "simulated_data.csv";
+#endif
 
     std::fstream fin;
     fin.open( filepath, std::ios::in );
