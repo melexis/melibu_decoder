@@ -1,5 +1,5 @@
 # public
-#natsort==7.1.0
+natsort==7.1.0
 #pyparsing==2.4.7
 pathlib
 
