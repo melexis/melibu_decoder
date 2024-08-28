@@ -28,7 +28,7 @@ For MeLiBu, both low level and high level analyzers are implemented.
 
    This folder contains visual studion project files and initial built dll. To make changes to code open .sln file with visual studio and when the code is changed rebuild solution in release mode.
 
-   New dll is now located in `MeLiBu_low_level\build\Analyzers\Release`.
+   New dll is now located in `MeLiBu_low_level\build\Analyzers\Release` (pre-build availabe within the release artifact).
 
    New dll can be copied to `MeLiBu_low_level\Release` folder and this folder can be used in Logic app or Custom Low Level Analyzer folder can be set to folder where new dll is.
 
